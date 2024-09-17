@@ -3,13 +3,7 @@
 import time
 import bs4
 from selenium import webdriver
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.alert import Alert
 
 class PokemonEventFinder:
     def __init__(self, url) -> None:
@@ -45,7 +39,6 @@ class PokemonEventFinder:
 
     def extractEventInfo(self, event_soup):
         temp_dict = {}
-        # print(event_soup.find(class_='event-header').get_text())
         temp_dict['when'] = event_soup.find(class_='when').get_text()
         temp_dict['name'] = event_soup.find(class_='event-header').get_text()
         temp_dict['reg'] = event_soup.find(class_='registration-time').get_text().replace('All Divisions', '')
