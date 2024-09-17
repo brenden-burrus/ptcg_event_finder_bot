@@ -10,4 +10,4 @@ if __name__ == "__main__":
     events = PokemonEventFinder(event_finder_url)
     
     events.getEvents()
-    
+    print(events.event_dicts)
