@@ -1,15 +1,20 @@
 import os
-import random
 
 import discord
-from dotenv import load_dotenv
-
 from discord.ext import commands
+from dotenv import load_dotenv
+from operator import itemgetter
+
+from get_events import getEvents
+
 
 #Load Environment Variables
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
+
+
+test_list =[{'when': 'October 05, 2024 6:00PM', 'name': 'Grapes Games League Challenge', 'reg': 'September 19, 2024 3:30PM - October 05, 2024 6:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/bddd35a1095a1fe211502068a3b50232', 'address': '16431 VILLAGE PLAZA VIEW DR, WILDWOOD, MO 63011, USA', 'locality': '', 'phone': '6363453024', 'email': 'Grapesgcc@gmail.com', 'store': 'Grapes Games'}, {'when': 'November 10, 2024 12:00PM', 'name': 'Yeti Gaming TCG November League Challenge', 'reg': 'November 10, 2024 11:00AM - November 10, 2024 12:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/04073b1c87889f1165976c76764be54e', 'address': '84 GRASSO PLAZA, AFFTON, MO 63123, USA', 'locality': '', 'phone': '3147971075', 'email': 'zack@yetigaming.com', 'store': 'Yeti Gaming'}, {'when': 'October 06, 2024 12:00PM', 'name': 'Yeti TCG Oct League Challenge', 'reg': 'October 06, 2024 11:00AM - October 06, 2024 12:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/04073b1c87889f1165976c76764be54e', 'address': '84 GRASSO PLAZA, AFFTON, MO 63123, USA', 'locality': '', 'phone': '(314) 797-1075', 'email': 'zack@yetigaming.com', 'store': 'Yeti Gaming'}, {'when': 'September 28, 2024 10:00AM', 'name': 'Collector Store League Cup', 'reg': 'September 28, 2024 9:00AM - September 28, 2024 10:00AM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/6e5715e01099de44d96929023bd7b45a', 'address': '1106 JUNGS STATION RD', 'locality': 'ST PETERS, MO, US', 'phone': '6364777800', 'email': 'kmccarthy@collectorstore.com', 'store': 'Collector Store'}, {'when': 'September 27, 2024 6:15PM', 'name': 'Collector Store League Challenge', 'reg': 'September 27, 2024 5:30PM - September 27, 2024 6:10PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/6e5715e01099de44d96929023bd7b45a', 'address': '1106 JUNGS STATION RD', 'locality': 'ST PETERS, MO, US', 'phone': '6364777800', 'email': 'kmccarthy@collectorstore.com', 'store': 'Collector Store'}, {'when': 'September 28, 2024 2:00PM', 'name': 'SVLeagueChallenge', 'reg': 'September 28, 2024 1:00PM - September 28, 2024 2:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/46d210053344676c3d935baa240d3836', 'address': '258 FORT ZUMWALT SQUARE', 'locality': "O'FALLON, MO, US", 'phone': '636-294-7529', 'email': 'manticoregameshop@gmail.com', 'store': 'Manticore Game Shop'}, {'when': 'September 28, 2024 2:00PM', 'name': 'Washington Pokémon League Cup', 'reg': 'July 12, 2024 12:00PM - September 28, 2024 2:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/cc35c474b832458a329bea71f9dde420', 'address': '316 JEFFERSON ST', 'locality': 'WASHINGTON, MO, US', 'phone': '6364328081', 'email': 'marc.lampe012@gmail.com', 'store': 'Game Euphoria'}, {'when': 'September 22, 2024 2:00PM', 'name': 'Washington Pokémon League Challenge', 'reg': 'September 01, 2024 12:00AM - September 22, 2024 2:00PM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/cc35c474b832458a329bea71f9dde420', 'address': '316 JEFFERSON ST', 'locality': 'WASHINGTON, MO, US', 'phone': '6364328081', 'email': 'marc.lampe012@gmail.com', 'store': 'Game Euphoria'}, {'when': 'November 17, 2024 11:15AM', 'name': 'Oct - Dec League Cup 2024', 'reg': 'November 17, 2024 10:00AM - November 17, 2024 11:00AM', 'league_details': 'https://www.pokemon.com/us/pokemon-trainer-club/play-pokemon-leagues/1f993f57e8a2dd17ac91dbb872fa2dd9', 'address': '1005 CENTURY DR', 'locality': 'EDWARDSVILLE, IL, US', 'phone': '(618) 659-0099', 'email': 'cadenbug01@gmail.com', 'store': 'Heroic Adventures'}]
 
 #instantiate Bot
 intents = discord.Intents.default()
@@ -23,19 +28,24 @@ async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
 
 
-@bot.command(name='99')
-async def nine_nine(ctx):
-    brooklyn_99_quotes = [
-        'I\'m the human form of the 💯 emoji.',
-        'Bingpot!',
-        (
-            'Cool. Cool cool cool cool cool cool cool, '
-            'no doubt no doubt no doubt no doubt.'
-        ),
-    ]
+# @bot.command(name='events')
+# async def help_text(ctx):
+#     for event in test_list:
+#         embedVar = discord.Embed(title=event['name'], color=0x00ff00)
+#         embedVar.add_field(name="Date", value=event['when'], inline=False)
+#         embedVar.add_field(name="Address", value=event['address']+event['locality'], inline=False)
 
-    response = random.choice(brooklyn_99_quotes)
-    await ctx.send(response)
+#         await ctx.send(embed=embedVar)
+
+
+@bot.command(name='events')
+async def help_text(ctx):
+    embedVar = discord.Embed(title="Upcoming Pokemon Challenges/Cups", color=0x00ff00)
+    for event in test_list:
+        embedVar.add_field(name=f'**{event["name"]}**', value=f'> Date: {event["when"]}\n> Address: {event['address']+' '+event['locality']}', inline=False)
+
+    await ctx.send(embed=embedVar)
+
 
 
 bot.run(TOKEN)
