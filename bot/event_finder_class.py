@@ -92,6 +92,7 @@ class PokemonEventFinder:
         temp_dict['phone'] = event_soup.find(class_='owner').find_all('a', href=True)[0]['href'].replace('tel:','')
         temp_dict['email'] = event_soup.find(class_='owner').find_all('a', href=True)[1]['href'].replace('mailto:','')
         temp_dict["store"] = self.getStoreName(temp_dict['address'])
+        temp_dict['month'] = temp_dict['when'].split(' ')[0]
 
         self.event_dicts.append(temp_dict)
 
