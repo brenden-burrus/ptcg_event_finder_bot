@@ -11,4 +11,5 @@ First, if the calling channel has a name that contains "cup" in it, it will only
 Second, it takes the relevant months worth of current data, and deletes any of its old messages that contain data from those months, that way it is cleaner and less spammy.
 
 Here is an example of the output format:
+
 ![image](https://github.com/user-attachments/assets/1bcd2360-a991-420f-9f31-2eef0e0f3f61)
