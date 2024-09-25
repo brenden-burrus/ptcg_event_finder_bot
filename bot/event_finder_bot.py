@@ -41,7 +41,6 @@ def get_events():
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(get_events, "cron", day_of_week="0-6", hour=1)
-# scheduler.add_job(send_events, "cron", day_of_week="0,2", hour=12)
 scheduler.start()
 
 
