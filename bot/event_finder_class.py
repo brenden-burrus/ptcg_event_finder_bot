@@ -38,10 +38,11 @@ class PokemonEventFinder:
         time.sleep(5)
         wait = WebDriverWait(driver, 10)
         button_list = driver.find_elements(By.CLASS_NAME, "event-card")
-        print(f"initial: {len(button_list)}")
-        for i in range(len(button_list)):
+        button_amt = len(button_list)
+        print(f"initial: {button_amt}")
+        for i in range(button_amt):
             buttons = driver.find_elements(By.CLASS_NAME, "event-card")
-            print(f"i: {i}, len: {len(buttons)}")
+            print(f"i: {i}, len: {button_amt}")
             wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "event-card")))
             try:
                 buttons[i].click()
