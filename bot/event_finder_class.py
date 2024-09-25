@@ -68,7 +68,6 @@ class PokemonEventFinder:
     
     def getStoreName(self, soup_address):
         for store, address in self.store_xref.items():
-            print(f"Comparing HTML: {soup_address} to dict: {address}")
             if address == soup_address:
                 return store
             
@@ -93,6 +92,7 @@ class PokemonEventFinder:
         temp_dict['email'] = event_soup.find(class_='owner').find_all('a', href=True)[1]['href'].replace('mailto:','')
         temp_dict["store"] = self.getStoreName(temp_dict['address'])
         temp_dict['month'] = temp_dict['when'].split(' ')[0]
+        temp_dict['year'] = temp_dict['when'].split(' ')[2]
 
         self.event_dicts.append(temp_dict)
 
