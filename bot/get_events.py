@@ -9,7 +9,7 @@ def getCups():
     event_finder_url = "https://events.pokemon.com/en-us/events?near=Manchester,%20MO,%20USA&filters=tcg,tournament,league_cup&maxDistance=50"
     events_class = initializeEventFinderClass(event_finder_url)
     
-    events_class.getEvents()
+    events_class.getEvents("cup")
 
     return events_class.event_dicts
 
@@ -18,7 +18,7 @@ def getChallenges():
     event_finder_url = "https://events.pokemon.com/en-us/events?near=Manchester,%20MO,%20USA&filters=tcg,tournament,league_challenge&maxDistance=50"
     events_class = initializeEventFinderClass(event_finder_url)
     
-    events_class.getEvents()
+    events_class.getEvents("challenge")
 
     return events_class.event_dicts
 
@@ -30,12 +30,11 @@ def getCupsChallenges():
     cup_event_class = initializeEventFinderClass(cups_url)
     challenge_event_class = initializeEventFinderClass(challenges_url)
 
-    cup_event_class.getEvents()
-    challenge_event_class.getEvents()
+    cup_event_class.getEvents("cup")
+    challenge_event_class.getEvents("challenge")
 
     return cup_event_class.event_dicts, challenge_event_class.event_dicts
 
 
 if __name__ == "__main__":
     cups = getCups()
-    challenges = getChallenges()
