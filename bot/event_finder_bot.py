@@ -7,7 +7,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from get_events import getCupsChallenges
+from get_events import getCupsChallenges, getChallenges
 import bot_functions as F
 
 CUP_LIST = []
@@ -30,10 +30,11 @@ def get_events():
     try:
         global CUP_LIST
         global CHALLENGE_LIST
-        CUP_LIST, CHALLENGE_LIST = getCupsChallenges()
+        # CUP_LIST, CHALLENGE_LIST = getCupsChallenges()
+        CHALLENGE_LIST = getChallenges()
         
-        CUP_LIST = sorted(CUP_LIST, key=itemgetter('when'), reverse=True)
-        CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('when'), reverse=True)
+        # CUP_LIST = sorted(CUP_LIST, key=itemgetter('date'), reverse=True)
+        CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('date'), reverse=True)
     except:
         print(f"Error occured while getting events {datetime.datetime.now()}")
     return
@@ -62,7 +63,7 @@ async def send_events(ctx):
         for month in relevant_months:
             messageText = messageText + f"# __{month} League Cups__\n\n"
             for event in CUP_LIST:
-                if event['month'] == month:
+                if event['date'].split(' ')[0] == month:
                     messageText = messageText + F.format_message(event)
             await ctx.send(messageText)
             messageText = ""
@@ -72,7 +73,7 @@ async def send_events(ctx):
         for month in relevant_months:
             messageText = messageText + f"# __{month} League Challenges__\n\n"
             for event in CHALLENGE_LIST:
-                if event['month'] == month:
+                if event['date'].split(' ')[0] == month:
                     messageText = messageText + F.format_message(event)
             await ctx.send(messageText)
             messageText = ""
@@ -82,7 +83,7 @@ async def send_events(ctx):
         for month in relevant_months:
             messageText = messageText + f"# *{month} League Cups and Challenges*\n\n"
             for event in CHALLENGE_LIST + CUP_LIST:
-                if event['month'] == month:
+                if event['date'].split(' ')[0] == month:
                     messageText = messageText + F.format_message(event)
             await ctx.send(messageText)
             messageText = ""
