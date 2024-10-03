@@ -52,10 +52,20 @@ class PokemonEventFinder:
         browser = await uc.start()
         page = await browser.get(self.url)
         await browser.wait(5)
-        html = await page.get_content()
-        self.parseCards(html)
-        await browser.wait(5)
+        card_amt = await page.select('#sort-control > div.count')
+        card_amt = int(card_amt.text.split(' ')[0])
+        card_list = []
+        while len(card_list) < card_amt:
+            html = await page.get_content()
+            cards = self.parseEventList(html)
+            card_list.extend(cards)
+            card_list = list(set(card_list))
+            card_holders = await page.find_all("card-holder")
+            await card_holders[-1].scroll_into_view()
+            await browser.wait(3)
+
         browser.stop()
+        self.parseCards(card_list)
 
         return
 
@@ -82,16 +92,34 @@ class PokemonEventFinder:
                 self.league_table_dicts.append(temp_dict)
 
 
-    def parseCards(self, page_source):
+    def parseEventList(self, page_source):
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         cards = soup.find_all(class_='event-card')
-        print(f"There are {len(cards)} event cards")
+        info_list = []
 
         for card in cards:
-            address = card.find(class_='address').get_text()
-            name = card.find(class_='event-header').get_text()
-            date = card.find(class_='when').get_text()
-            time = card.find(class_='when').get_text().split(' ')[-1]
+            address = card.find(class_='address').get_text().replace(" ", "_")
+            name = card.find(class_='event-header').get_text().replace(" ", "_")
+            date = card.find(class_='when').get_text().replace(" ", "_")
+            temp_text = address + " " + name + " " + date + " "
+            info_list.append(temp_text)
+
+        return info_list
+
+
+
+    def parseCards(self, card_list):
+        print(f"There are {len(card_list)} event cards")
+
+        for card in card_list:
+            print(f"heres the card: {card}")
+            address, name, date = card.split(' ', 2)
+            address = address.replace('_', " ")
+            name = name.replace('_', " ")
+            date = date.replace('_', " ")
+            time = date.split(" ")[-2]
+            print(f"time - {time}")
+            print(f"{address}, {name}, {date}")
 
             for store, xref in self.store_xref.items():
                 if xref == address:
