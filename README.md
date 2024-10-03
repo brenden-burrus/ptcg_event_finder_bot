@@ -12,4 +12,4 @@ Second, it takes the relevant months worth of current data, and deletes any of i
 
 Here is an example of the output format:
 
-![image](https://github.com/user-attachments/assets/1bcd2360-a991-420f-9f31-2eef0e0f3f61)
+![image](https://github.com/user-attachments/assets/c493374e-8b83-4f71-8b73-303c2386350f)
