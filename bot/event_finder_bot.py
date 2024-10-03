@@ -7,7 +7,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from get_events import getCupsChallenges, getChallenges
+from get_events import getCupsChallenges
 import bot_functions as F
 
 CUP_LIST = []
@@ -30,11 +30,10 @@ def get_events():
     try:
         global CUP_LIST
         global CHALLENGE_LIST
-        # CUP_LIST, CHALLENGE_LIST = getCupsChallenges()
-        CHALLENGE_LIST = getChallenges()
+        CUP_LIST, CHALLENGE_LIST = getCupsChallenges()
         
-        # CUP_LIST = sorted(CUP_LIST, key=itemgetter('date'), reverse=True)
-        CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('date'), reverse=True)
+        CUP_LIST = sorted(CUP_LIST, key=itemgetter('date'), reverse=False)
+        CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('date'), reverse=False)
     except:
         print(f"Error occured while getting events {datetime.datetime.now()}")
     return

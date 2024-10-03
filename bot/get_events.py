@@ -48,6 +48,6 @@ def getCupsChallenges():
     return cup_event_class.league_table_dicts, challenge_event_class.league_table_dicts
 
 
-if __name__ == "__main__":
-    cups = getChallenges()
-    print(cups)
+# if __name__ == "__main__":
+#     cups = getChallenges()
+#     print(cups)
