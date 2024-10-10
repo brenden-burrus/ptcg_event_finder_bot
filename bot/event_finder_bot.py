@@ -59,7 +59,7 @@ async def send_events(ctx):
     if "cup" in ctx.channel.name:
         relevant_months = F.get_months(CUP_LIST)
         await F.delete_old_messages(ctx, bot.user.id, F.get_months(CUP_LIST))
-        for month in relevant_months:
+        for month in reversed(relevant_months):
             messageText = messageText + f"# __{month} League Cups__\n\n"
             for event in CUP_LIST:
                 if event['date'].split(' ')[0] == month:
@@ -69,7 +69,7 @@ async def send_events(ctx):
     elif "challenge" in ctx.channel.name:
         relevant_months = F.get_months(CHALLENGE_LIST)
         await F.delete_old_messages(ctx, bot.user.id, F.get_months(CHALLENGE_LIST))
-        for month in relevant_months:
+        for month in reversed(relevant_months):
             messageText = messageText + f"# __{month} League Challenges__\n\n"
             for event in CHALLENGE_LIST:
                 if event['date'].split(' ')[0] == month:
@@ -79,7 +79,7 @@ async def send_events(ctx):
     else:
         relevant_months = F.get_months(CHALLENGE_LIST + CUP_LIST)
         await F.delete_old_messages(ctx, bot.user.id, F.get_months(CHALLENGE_LIST + CUP_LIST))
-        for month in relevant_months:
+        for month in reversed(relevant_months):
             messageText = messageText + f"# *{month} League Cups and Challenges*\n\n"
             for event in CHALLENGE_LIST + CUP_LIST:
                 if event['date'].split(' ')[0] == month:
