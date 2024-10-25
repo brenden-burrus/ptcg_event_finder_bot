@@ -21,7 +21,9 @@ class PokemonEventFinder:
             "Gambrill Gaming": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239029/",
             "Fortuna Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6235772/",
             "Fantasy Books and Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/5863209/",
-            "The Nerd Merchant": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239453/"}
+            "The Nerd Merchant": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239453/",
+            "Pokepit": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239235/"
+            }
         self.store_xref = {
             "Yeti Gaming": "84 GRASSO PLAZA, AFFTON, MO 63123, USA",
             "Grapes Games": "16431 VILLAGE PLAZA VIEW DR, WILDWOOD, MO 63011, USA",
@@ -32,7 +34,8 @@ class PokemonEventFinder:
             "Gambrill Gaming": "189 N LINCOLN DR",
             "Fortuna Games": "2632 S KINGSHIGHWAY BLVD",
             "Fantasy Books and Games": "1977 W HWY 50",
-            "The Nerd Merchant": "124 W JEFFERSON AVE STE 107"
+            "The Nerd Merchant": "124 W JEFFERSON AVE STE 107",
+            "Pokepit": "22 VILLAGE PLAZA"
         }
 
     # Gets the table for either cups or challenges from the store's page on pokemon.com
