@@ -1,4 +1,5 @@
-import nodriver as uc
+# import nodriver as uc
+import zendriver as uc
 import time
 import bs4
 import datetime
@@ -46,7 +47,7 @@ class PokemonEventFinder:
         html = await page.get_content()
         self.parseTable(html, store)
         await browser.wait(5)
-        browser.stop()
+        await browser.stop()
 
         return
 
@@ -67,7 +68,7 @@ class PokemonEventFinder:
             await card_holders[-1].scroll_into_view()
             await browser.wait(3)
 
-        browser.stop()
+        await browser.stop()
         self.parseCards(card_list)
 
         return
