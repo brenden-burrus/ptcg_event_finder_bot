@@ -1,4 +1,5 @@
 def format_message(event_dict):
+    print(event_dict)
     date = event_dict['date']
     time = event_dict['time']
     store = event_dict['store']

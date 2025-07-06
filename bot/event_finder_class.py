@@ -23,7 +23,8 @@ class PokemonEventFinder:
             "Fortuna Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6235772/",
             "Fantasy Books and Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/5863209/",
             "The Nerd Merchant": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239453/",
-            "Pokepit": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239235/"
+            "Pokepit": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239235/",
+            "Impact Gaming Center": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6240743/"
             }
         self.store_xref = {
             "Yeti Gaming": "84 GRASSO PLAZA, AFFTON, MO 63123, USA",
@@ -36,7 +37,8 @@ class PokemonEventFinder:
             "Fortuna Games": "2632 S KINGSHIGHWAY BLVD",
             "Fantasy Books and Games": "1977 W HWY 50",
             "The Nerd Merchant": "124 W JEFFERSON AVE STE 107",
-            "Pokepit": "22 VILLAGE PLAZA"
+            "Pokepit": "22 VILLAGE PLAZA",
+            "Impact Gaming Center": "49 LUDWIG DR, FAIRVIEW HEIGHTS, IL 62208, USA"
         }
 
     # Gets the table for either cups or challenges from the store's page on pokemon.com
@@ -82,6 +84,7 @@ class PokemonEventFinder:
         rows = table_body.find_all('tr')
 
         for row in rows:
+            # print(row)
             temp_dict = {}
             link = row.find('a').get('href')
             link = "https://www.pokemon.com"+link
@@ -94,6 +97,7 @@ class PokemonEventFinder:
                 temp_dict['date'] = cols[3]
                 temp_dict['tourney_page'] = cols[4]
                 self.league_table_dicts.append(temp_dict)
+
 
 
     def parseEventList(self, page_source):
@@ -114,6 +118,7 @@ class PokemonEventFinder:
 
     def parseCards(self, card_list):
         print(f"There are {len(card_list)} event cards")
+        # print(self.league_table_dicts)
 
         for card in card_list:
             print(f"heres the card: {card}")
@@ -122,8 +127,9 @@ class PokemonEventFinder:
             name = name.replace('_', " ")
             date = date.replace('_', " ")
             time = date.split(" ")[-2]
-            print(f"time - {time}")
-            print(f"{address}, {name}, {date}")
+            # print(f"{address}, {name}, {date}")
+            # print(f"time - {time}")
+            
 
             for store, xref in self.store_xref.items():
                 if xref == address:
