@@ -7,7 +7,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from get_events import getCupsChallenges
+from bot.get_events_old import getCupsChallenges
 import bot_functions as F
 
 CUP_LIST = []

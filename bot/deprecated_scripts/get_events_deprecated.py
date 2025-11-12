@@ -1,4 +1,4 @@
-from event_finder_class import PokemonEventFinder
+from bot.event_finder_class_old import PokemonEventFinder
 
 
 def initializeEventFinderClass(url):

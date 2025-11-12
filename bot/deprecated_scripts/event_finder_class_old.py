@@ -9,79 +9,37 @@ import calendar
 class PokemonEventFinder:
     def __init__(self, event_finder_url) -> None:
         self.url = event_finder_url
-        self.cup_dicts = []
-        self.challenge_dicts = []
-
-    #
-    async def getEventSearchResults(self):
-        # Start the broswer and navigate to url
-        browser = await uc.start()
-        page = await browser.get(self.url)
-        await browser.wait(5)
-
-        # Enter STL into the text box and search
-        consent = await page.find("Accept All", best_match=True)
-        await consent.click()
-        await browser.wait(3)
-        test_input = await page.select("#b7-Input_LocationName")
-        await test_input.send_keys("St. Louis, MO, USA")
-        await browser.wait(3)
-        search_button = await page.find("Search Locations")
-        await search_button.click()
-        await browser.wait(5)
-        
-        # Iterate through all stores found in search results and parse its events
-        store_list = await page.find_all('Game Store')
-        i = 0
-        imax = len(store_list)
-        print(len(store_list))
-        while i < imax:
-            await store_list[i].click()
-            await browser.wait(3)
-            html = await page.get_content()
-            page_url = page.url
-            self.parseStorePage(html, page_url)
-            await browser.wait(3)
-            back_button = await page.find("Back to previous screen")
-            await back_button.click()
-            await browser.wait(3)
-            
-            store_list = await page.find_all('Game Store')
-            i += 2
-
-        await browser.stop()
-
-        return
-
-    def parseStorePage(self, page_source, page_url):
-        soup = bs4.BeautifulSoup(page_source, 'lxml')
-        cards_list = soup.find('div', id='b10-Content')
-        event_cards = cards_list.find_all('div', class_='margin-bottom-base')
-
-        store_name = soup.find('div', id='b6-Title').get_text()
-        print(f"Store Name: {store_name}, Number of Events: {len(event_cards)}")
-        for card in event_cards:
-            temp_dict = {}
-            tourney_type = card.find('div', class_='event-info__category ph').get_text()
-            tourney_name = card.find('div', class_='event-info__title ph').get_text()
-            address = card.find('div', class_='event-info__info-item__location').get_text()
-            date = card.find('div', class_='event-info__info-item__text').get_text()
- 
-            temp_dict['store'] = store_name
-            temp_dict['name'] = tourney_name
-            temp_dict['date'] = date
-            temp_dict['tourney_page'] = page_url
-            temp_dict['tourney_address'] = address
-            print(temp_dict)
-            if tourney_type == "Cup":
-                self.cup_dicts.append(temp_dict)
-            else:
-                self.challenge_dicts.append(temp_dict)
-
-        return
-
-
-
+        self.league_table_dicts = []
+        self.event_finder_dicts = []
+        self.event_dicts = []
+        self.store_urls = {
+            "Yeti Gaming": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/4719/",
+            "Grapes Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6238850/",
+            "Collector Store": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/4423201/",
+            "Manticore Game Shop": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/108903/",
+            "Game Euphoria": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6234924/",
+            "Heroic Adventures": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/3023200/",
+            "Gambrill Gaming": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239029/",
+            "Fortuna Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6235772/",
+            "Fantasy Books and Games": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/5863209/",
+            "The Nerd Merchant": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239453/",
+            "Pokepit": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6239235/",
+            "Impact Gaming Center": "https://www.pokemon.com/us/play-pokemon/pokemon-events/leagues/6240743/"
+            }
+        self.store_xref = {
+            "Yeti Gaming": "84 GRASSO PLAZA, AFFTON, MO 63123, USA",
+            "Grapes Games": "16431 VILLAGE PLAZA VIEW DR, WILDWOOD, MO 63011, USA",
+            "Collector Store": "1106 JUNGS STATION RD",
+            "Manticore Game Shop": "258 FORT ZUMWALT SQUARE",
+            "Game Euphoria": "316 JEFFERSON ST",
+            "Heroic Adventures": "1005 CENTURY DR",
+            "Gambrill Gaming": "189 N LINCOLN DR",
+            "Fortuna Games": "2632 S KINGSHIGHWAY BLVD",
+            "Fantasy Books and Games": "1977 W HWY 50",
+            "The Nerd Merchant": "124 W JEFFERSON AVE STE 107",
+            "Pokepit": "22 VILLAGE PLAZA",
+            "Impact Gaming Center": "49 LUDWIG DR, FAIRVIEW HEIGHTS, IL 62208, USA"
+        }
 
     # Gets the table for either cups or challenges from the store's page on pokemon.com
     async def getStoreEventTable(self, store, base_url, ttype):
@@ -157,6 +115,7 @@ class PokemonEventFinder:
         return info_list
 
 
+
     def parseCards(self, card_list):
         print(f"There are {len(card_list)} event cards")
         # print(self.league_table_dicts)
@@ -207,7 +166,11 @@ class PokemonEventFinder:
 
 
 
-    def getEvents(self):
-        uc.loop().run_until_complete(self.getEventSearchResults())
+    def getEvents(self, ttype):
+        for store, url in self.store_urls.items():
+            uc.loop().run_until_complete(self.getStoreEventTable(store, url, ttype))
+
+        uc.loop().run_until_complete(self.getEventFinderCards())
+        self.CleanupPastEvents()
 
         
