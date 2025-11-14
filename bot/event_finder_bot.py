@@ -7,7 +7,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from bot.get_events_old import getCupsChallenges
+from get_events import getLocalEvents
 import bot_functions as F
 
 CUP_LIST = []
@@ -30,7 +30,7 @@ def get_events():
     try:
         global CUP_LIST
         global CHALLENGE_LIST
-        CUP_LIST, CHALLENGE_LIST = getCupsChallenges()
+        CUP_LIST, CHALLENGE_LIST = getLocalEvents()
         
         CUP_LIST = sorted(CUP_LIST, key=itemgetter('date'), reverse=False)
         CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('date'), reverse=False)

@@ -12,7 +12,7 @@ class PokemonEventFinder:
         self.cup_dicts = []
         self.challenge_dicts = []
 
-    #
+    
     async def getEventSearchResults(self):
         # Start the broswer and navigate to url
         browser = await uc.start()
@@ -53,13 +53,14 @@ class PokemonEventFinder:
 
         return
 
+
     def parseStorePage(self, page_source, page_url):
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         cards_list = soup.find('div', id='b10-Content')
         event_cards = cards_list.find_all('div', class_='margin-bottom-base')
 
         store_name = soup.find('div', id='b6-Title').get_text()
-        print(f"Store Name: {store_name}, Number of Events: {len(event_cards)}")
+        print(f"{store_name}")
         for card in event_cards:
             temp_dict = {}
             tourney_type = card.find('div', class_='event-info__category ph').get_text()
@@ -81,116 +82,13 @@ class PokemonEventFinder:
         return
 
 
-
-
-    # Gets the table for either cups or challenges from the store's page on pokemon.com
-    async def getStoreEventTable(self, store, base_url, ttype):
-        browser = await uc.start()
-        page = await browser.get(base_url+ttype)
-        await browser.wait(5)
-        html = await page.get_content()
-        self.parseTable(html, store)
-        await browser.wait(5)
-        await browser.stop()
-
-        return
-
-
-    async def getEventFinderCards(self):
-        browser = await uc.start()
-        page = await browser.get(self.url)
-        await browser.wait(5)
-        card_amt = await page.select('#sort-control > div.count')
-        card_amt = int(card_amt.text.split(' ')[0])
-        card_list = []
-        while len(card_list) < card_amt:
-            html = await page.get_content()
-            cards = self.parseEventList(html)
-            card_list.extend(cards)
-            card_list = list(set(card_list))
-            card_holders = await page.find_all("card-holder")
-            await card_holders[-1].scroll_into_view()
-            await browser.wait(3)
-
-        await browser.stop()
-        self.parseCards(card_list)
-
-        return
-
-    
-    # Parses the table to get the wanted info from it
-    def parseTable(self, page_source, store):
-        soup = bs4.BeautifulSoup(page_source, 'lxml')
-        table = soup.find('table')
-        table_body = table.find('tbody')
-        rows = table_body.find_all('tr')
-
-        for row in rows:
-            # print(row)
-            temp_dict = {}
-            link = row.find('a').get('href')
-            link = "https://www.pokemon.com"+link
-            cols = row.find_all('td')
-            cols = [ele.text.strip() for ele in cols]
-            cols.append(link)
-            if cols[2] == 'Sanctioned' and "TCG" in cols[0]:
-                temp_dict['store'] = store
-                temp_dict['name'] = cols[0]
-                temp_dict['date'] = cols[3]
-                temp_dict['tourney_page'] = cols[4]
-                self.league_table_dicts.append(temp_dict)
-
-
-
-    def parseEventList(self, page_source):
-        soup = bs4.BeautifulSoup(page_source, 'lxml')
-        cards = soup.find_all(class_='event-card')
-        info_list = []
-
-        for card in cards:
-            address = card.find(class_='address').get_text().replace(" ", "_")
-            name = card.find(class_='event-header').get_text().replace(" ", "_")
-            date = card.find(class_='when').get_text().replace(" ", "_")
-            temp_text = address + " " + name + " " + date + " "
-            info_list.append(temp_text)
-
-        return info_list
-
-
-    def parseCards(self, card_list):
-        print(f"There are {len(card_list)} event cards")
-        # print(self.league_table_dicts)
-
-        for card in card_list:
-            print(f"heres the card: {card}")
-            address, name, date = card.split(' ', 2)
-            address = address.replace('_', " ")
-            name = name.replace('_', " ")
-            date = date.replace('_', " ")
-            time = date.split(" ")[-2]
-            # print(f"{address}, {name}, {date}")
-            # print(f"time - {time}")
-            
-
-            for store, xref in self.store_xref.items():
-                if xref == address:
-                    store_name = store
-                    break
-
-            for event in self.league_table_dicts:
-                if event['store'] == store_name and event['date'] in date:
-                    event['time'] = time
-                    event['name'] = name
-                    break
-            
-
     def CleanupPastEvents(self):
         today = datetime.datetime.now()
         temp_list = []
-        for i in range(len(self.league_table_dicts)):
-            month = self.league_table_dicts[i]['date'].split(" ")[0]
-            year = int(self.league_table_dicts[i]['date'].split(" ")[-1])
-            day = int(self.league_table_dicts[i]['date'].split(" ")[1].replace(',',''))
+        for i in range(len(self.challenge_dicts)):
+            month = self.challenge_dicts[i]['date'].split(" ")[1]
+            year = int(self.challenge_dicts[i]['date'].split(" ")[3])
+            day = int(self.challenge_dicts[i]['date'].split(" ")[2].replace(',',''))
 
             for y in range(len(calendar.month_name)):
                 if str(calendar.month_name[y]) == str(month):
@@ -198,9 +96,25 @@ class PokemonEventFinder:
                     break
 
             if datetime.datetime(year, month, day) > today:
-                temp_list.append(self.league_table_dicts[i])
+                temp_list.append(self.challenge_dicts[i])
 
-        self.league_table_dicts = temp_list
+        self.challenge_dicts = temp_list
+
+        temp_list = []
+        for i in range(len(self.cup_dicts)):
+            month = self.cup_dicts[i]['date'].split(" ")[1]
+            year = int(self.cup_dicts[i]['date'].split(" ")[3])
+            day = int(self.cup_dicts[i]['date'].split(" ")[2].replace(',',''))
+
+            for y in range(len(calendar.month_name)):
+                if str(calendar.month_name[y]) == str(month):
+                    month = y
+                    break
+
+            if datetime.datetime(year, month, day) > today:
+                temp_list.append(self.cup_dicts[i])
+
+        self.cup_dicts = temp_list
         
         return
 
@@ -209,5 +123,6 @@ class PokemonEventFinder:
 
     def getEvents(self):
         uc.loop().run_until_complete(self.getEventSearchResults())
+        self.CleanupPastEvents()
 
         

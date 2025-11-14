@@ -6,6 +6,9 @@ name = "pypi"
 [packages]
 zendriver = "*"
 beautifulsoup4 = "*"
+discord = "*"
+python-dotenv = "*"
+apscheduler = "*"
 
 [dev-packages]
 

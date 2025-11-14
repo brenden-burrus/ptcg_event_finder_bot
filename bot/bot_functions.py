@@ -1,12 +1,13 @@
 def format_message(event_dict):
     print(event_dict)
     date = event_dict['date']
-    time = event_dict['time']
+    # time = event_dict['time']
     store = event_dict['store']
     name = event_dict['name']
+    address = event_dict['tourney_address']
     tourney_page = event_dict['tourney_page']
 
-    messageText = f"__{name}__\n{date} - {store}\nStart Time: {time}\n[Tournament Link]({tourney_page})\n"
+    messageText = f"__{name}__\n{store}\nDate: {date}\nAddress: {address}\n[Tournament Link]({tourney_page})\n"
 
     return messageText
 
