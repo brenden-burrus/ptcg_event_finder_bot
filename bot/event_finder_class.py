@@ -34,7 +34,7 @@ class PokemonEventFinder:
         store_list = await page.find_all('Game Store')
         i = 0
         imax = len(store_list)
-        print(len(store_list))
+        # print(len(store_list))
         while i < imax:
             await store_list[i].click()
             await browser.wait(3)
@@ -73,7 +73,7 @@ class PokemonEventFinder:
             temp_dict['date'] = date
             temp_dict['tourney_page'] = page_url
             temp_dict['tourney_address'] = address
-            print(temp_dict)
+            # print(temp_dict)
             if tourney_type == "Cup":
                 self.cup_dicts.append(temp_dict)
             else:

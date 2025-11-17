@@ -7,7 +7,10 @@ def format_message(event_dict):
     address = event_dict['tourney_address']
     tourney_page = event_dict['tourney_page']
 
-    messageText = f"__{name}__\n{store}\nDate: {date}\nAddress: {address}\n[Tournament Link]({tourney_page})\n"
+    messageText_old = f"__{name}__\n{store}\nDate: {date}\nAddress: {address}\n[Tournament Link]({tourney_page})\n"
+    messageText = f"__{name}__\n{store}\nDate: {date}\nAddress: {address}\n"
+    print(f"Length of original message: {len(messageText_old)}")
+    print(f"Length of new message: {len(messageText)}")
 
     return messageText
 
@@ -15,11 +18,9 @@ def format_message(event_dict):
 def get_months(event_dict_list):
     current_months = []
     for event in event_dict_list:
-        if event['date'].split(' ')[0] not in current_months:
-            current_months.append(event['date'].split(' ')[0])
-
+        if event['date'].split(' ')[1] not in current_months:
+            current_months.append(event['date'].split(' ')[1])
     return current_months
-
 
 async def delete_old_messages(context, user_id, months):
     async for message in context.channel.history(limit=50):

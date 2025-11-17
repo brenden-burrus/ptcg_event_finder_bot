@@ -14,10 +14,6 @@ def getLocalEvents():
     
     events_class.getEvents()
 
-    print(events_class.cup_dicts)
-    print('--------------------------------')
-    print(events_class.challenge_dicts)
-
     return events_class.cup_dicts, events_class.challenge_dicts
 
 
