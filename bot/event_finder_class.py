@@ -4,6 +4,7 @@ import time
 import bs4
 import datetime
 import calendar
+import os
 
 
 class PokemonEventFinder:
