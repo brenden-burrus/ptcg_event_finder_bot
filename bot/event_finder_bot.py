@@ -44,7 +44,7 @@ def get_events():
     return
     
 
-
+print("this codes fucked")
 scheduler = BackgroundScheduler()
 scheduler.add_job(get_events, "cron", day_of_week="0-6", hour=1)
 scheduler.start()
@@ -53,10 +53,6 @@ scheduler.start()
 #initial_run
 get_events()
 
-
-@bot.event
-async def on_ready():
-    print(f'{bot.user.name} has connected to Discord!')
 
 
 @bot.command(name='events')
