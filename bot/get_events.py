@@ -5,8 +5,9 @@ import datetime
 def getLocalEvents():
     current_time = datetime.datetime.now()
     search_date = str(current_time.strftime('%Y-%m-%d'))
-    event_finder_url = f"https://events.pokemon.com/EventLocator/Home?latitude=38.62742799999999&longitude=-90.1982439&iskm=false&range=50&SortDistance=true&locale=en-US&startdate={search_date}&filters=league_cup,league_challenge,tcg"
-    events_class = PokemonEventFinder(event_finder_url)
+    search_location = "St. Louis, MO, USA"
+    event_finder_url = f"https://events.pokemon.com/EventLocator/Home?iskm=false&range=50&SortDistance=true&locale=en-US&startdate={search_date}&filters=league_cup,league_challenge,tcg"
+    events_class = PokemonEventFinder(event_finder_url, search_location)
     
     events_class.getEvents()
 
