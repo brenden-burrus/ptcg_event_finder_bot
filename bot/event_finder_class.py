@@ -23,9 +23,12 @@ class PokemonEventFinder:
         consent = await page.find("Accept All", best_match=True)
         await consent.click()
         await browser.wait(3)
-        test_input = await page.select("#b7-Input_LocationName")
+        test_input = await page.select("#b3-Input_LocationName")
         await test_input.send_keys("St. Louis, MO, USA")
         await browser.wait(3)
+        dropdown_option = await page.select('.pac-item')
+        await dropdown_option.mouse_click()
+        await browser.wait(2)
         search_button = await page.find("Search Locations")
         await search_button.click()
         await browser.wait(5)
@@ -56,10 +59,17 @@ class PokemonEventFinder:
 
     def parseStorePage(self, page_source, page_url):
         soup = bs4.BeautifulSoup(page_source, 'lxml')
-        cards_list = soup.find('div', id='b10-Content')
+        store_name_el = soup.find('span', attrs={'aria-label': lambda v: v and v.startswith('Game Store:')})
+        store_name = store_name_el.get_text()
+        cards_list = soup.find('div', id='b11-Content')
+        if not cards_list:
+            print("no cards")
+            return
         event_cards = cards_list.find_all('div', class_='margin-bottom-base')
+        if not event_cards:
+            print("no event cards")
+            return
 
-        store_name = soup.find('div', id='b6-Title').get_text()
         print(f"{store_name}")
         for card in event_cards:
             temp_dict = {}
