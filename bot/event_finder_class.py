@@ -8,8 +8,9 @@ import os
 
 
 class PokemonEventFinder:
-    def __init__(self, event_finder_url) -> None:
+    def __init__(self, event_finder_url, search_location) -> None:
         self.url = event_finder_url
+        self.search_location = search_location
         self.cup_dicts = []
         self.challenge_dicts = []
 
@@ -20,12 +21,12 @@ class PokemonEventFinder:
         page = await browser.get(self.url)
         await browser.wait(5)
 
-        # Enter STL into the text box and search
+        # Enter the search location into the text box and search
         consent = await page.find("Accept All", best_match=True)
         await consent.click()
         await browser.wait(3)
         test_input = await page.select("#b3-Input_LocationName")
-        await test_input.send_keys("St. Louis, MO, USA")
+        await test_input.send_keys(self.search_location)
         await browser.wait(3)
         dropdown_option = await page.select('.pac-item')
         await dropdown_option.mouse_click()
