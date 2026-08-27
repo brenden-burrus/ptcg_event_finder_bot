@@ -84,6 +84,12 @@ class PokemonEventFinder:
     def parseStorePage(self, page_source, page_url):
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         store_name_el = soup.find('span', attrs={'aria-label': lambda v: v and v.startswith('Game Store:')})
+        if not store_name_el:
+            # Some pages reached from the results list carry no store name.
+            # Skipping just this page keeps the stores already parsed in this
+            # run, rather than letting one odd page throw all of them away.
+            print("no store name")
+            return
         store_name = store_name_el.get_text()
         cards_list = soup.find('div', id='b11-Content')
         if not cards_list:
