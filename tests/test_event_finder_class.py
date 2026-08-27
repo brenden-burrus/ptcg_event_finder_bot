@@ -34,11 +34,15 @@ class FakePage:
     successive calls; a batch may be an exception instance, which is raised
     instead. zendriver's real `find_all` raises `asyncio.TimeoutError` when the
     text never appears, rather than returning an empty list.
+
+    `content` is the page source `get_content` returns. Pass a list to serve a
+    different source on each call, one per store the loop visits.
     """
 
     def __init__(self, store_batches, content=EMPTY_RESULTS_PAGE):
         self.store_batches = list(store_batches)
-        self.content = content
+        self.contents = list(content) if isinstance(content, list) else None
+        self.content = content if self.contents is None else EMPTY_RESULTS_PAGE
         self.url = "https://events.pokemon.com/EventLocator/Store/1"
         self.location_input = FakeElement()
 
@@ -57,6 +61,8 @@ class FakePage:
         return batch
 
     async def get_content(self):
+        if self.contents:
+            return self.contents.pop(0)
         return self.content
 
 
@@ -241,6 +247,57 @@ def test_store_page_events_are_split_by_category():
     # the element's text, so the "Game Store: " prefix is not part of it.
     assert finder.cup_dicts[0]['store'] == "FORTUNA GAMES"
     assert finder.cup_dicts[0]['tourney_address'] == "123 Main St"
+
+
+# --- #9: a page without a store name must not sink the whole run -------------
+
+
+PAGE_WITHOUT_A_STORE_NAME = """
+<html><body>
+  <div id="b11-Content">
+    <div class="margin-bottom-base">
+      <div class="event-info__category ph">Cup</div>
+      <div class="event-info__title ph">League Cup</div>
+      <div class="event-info__info-item__location">123 Main St</div>
+      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+def test_page_without_a_store_name_is_skipped(capsys):
+    """Regression test for #9.
+
+    Some pages reached from the results list carry no 'Game Store:' span. The
+    lookup used to be unguarded, so one such page raised AttributeError.
+    """
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    finder.parseStorePage(PAGE_WITHOUT_A_STORE_NAME, "https://events.pokemon.com/EventLocator/Store/7")
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == []
+    assert "no store name" in capsys.readouterr().out
+
+
+async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_browser):
+    """The crash in #9 happened mid-iteration, so it cost every earlier store.
+
+    The run must keep the store it has already parsed, carry on past the
+    unnamed one, and still close the browser.
+    """
+    # Each store contributes two 'Game Store' matches, hence the stride of two
+    # in the loop: four elements is two stores.
+    stores = [FakeElement() for _ in range(4)]
+    page = FakePage([stores, stores, stores], content=[PAGE_WITHOUT_A_STORE_NAME, STORE_PAGE])
+    browser = fake_browser(page)
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
 
 
 # --- #6: the location constructor argument drives the search -----------------
