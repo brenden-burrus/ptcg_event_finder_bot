@@ -36,13 +36,13 @@ class FakePage:
     text never appears, rather than returning an empty list.
 
     `content` is the page source `get_content` returns. Pass a list to serve a
-    different source on each call, one per store the loop visits.
+    different source on each call, one per store the loop visits; the last one
+    sticks once the list runs down.
     """
 
     def __init__(self, store_batches, content=EMPTY_RESULTS_PAGE):
         self.store_batches = list(store_batches)
-        self.contents = list(content) if isinstance(content, list) else None
-        self.content = content if self.contents is None else EMPTY_RESULTS_PAGE
+        self.page_sources = list(content) if isinstance(content, list) else [content]
         self.url = "https://events.pokemon.com/EventLocator/Store/1"
         self.location_input = FakeElement()
 
@@ -61,9 +61,9 @@ class FakePage:
         return batch
 
     async def get_content(self):
-        if self.contents:
-            return self.contents.pop(0)
-        return self.content
+        if len(self.page_sources) > 1:
+            return self.page_sources.pop(0)
+        return self.page_sources[0]
 
 
 class FakeBrowser:
@@ -288,9 +288,11 @@ async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_brows
     unnamed one, and still close the browser.
     """
     # Each store contributes two 'Game Store' matches, hence the stride of two
-    # in the loop: four elements is two stores.
+    # in the loop: four elements is two stores. The named store is visited
+    # first, so its events are already banked when the unnamed one comes up --
+    # the sequence the issue reported.
     stores = [FakeElement() for _ in range(4)]
-    page = FakePage([stores, stores, stores], content=[PAGE_WITHOUT_A_STORE_NAME, STORE_PAGE])
+    page = FakePage([stores, stores, stores], content=[STORE_PAGE, PAGE_WITHOUT_A_STORE_NAME])
     browser = fake_browser(page)
     finder = PokemonEventFinder(URL, LOCATION)
 
