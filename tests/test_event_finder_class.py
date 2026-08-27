@@ -1,4 +1,5 @@
 import asyncio
+import warnings
 
 import pytest
 
@@ -70,6 +71,7 @@ class FakeBrowser:
     def __init__(self, page):
         self.page = page
         self.stopped = False
+        self.loop = None
 
     async def get(self, url):
         return self.page
@@ -78,6 +80,9 @@ class FakeBrowser:
         return
 
     async def stop(self):
+        # Recorded so a test can ask what happened to the loop the scrape ran
+        # on, once the synchronous entry point has returned.
+        self.loop = asyncio.get_running_loop()
         self.stopped = True
 
 
@@ -313,3 +318,49 @@ async def test_search_location_is_typed_into_the_box(fake_browser):
     await finder.getEventSearchResults()
 
     assert page.location_input.typed == ["Chicago, IL, USA"]
+
+
+# --- #12: the synchronous entry point runs on a supported event loop ---------
+
+
+def test_getEvents_calls_nothing_deprecated(fake_browser):
+    """Regression test for #12.
+
+    `getEvents` drove the scrape with `uc.loop()`, deprecated in zendriver
+    since 0.5.1 and still called on 0.16.0. It is the only entry point the
+    scheduled job has, so losing it on an upgrade stops the whole job.
+
+    Scoped to warnings blamed on this project's own module: a deprecation
+    inside bs4 or the stdlib is not this test's business, and would otherwise
+    fail it for something no one here can fix.
+    """
+    fake_browser(FakePage([timed_out()]))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        finder.getEvents()
+
+    ours = [
+        w for w in caught
+        if issubclass(w.category, DeprecationWarning)
+        and w.filename.endswith("event_finder_class.py")
+    ]
+    assert not ours, f"deprecated call: {[str(w.message) for w in ours]}"
+
+
+def test_getEvents_closes_the_loop_it_opened(fake_browser):
+    """`uc.loop()` handed back a loop that `run_until_complete` never closed.
+
+    The scheduled job calls `getEvents` once a night for the life of the
+    process, so each run leaked a loop. Asking the browser which loop it was
+    stopped on pins the loop the scrape actually used, rather than whatever
+    happens to be installed on this thread once the suite has run.
+    """
+    browser = fake_browser(FakePage([timed_out()]))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    finder.getEvents()
+
+    assert browser.loop is not None, "the scrape never ran"
+    assert browser.loop.is_closed(), "the loop getEvents opened was left open"

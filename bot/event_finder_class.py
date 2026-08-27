@@ -162,7 +162,7 @@ class PokemonEventFinder:
 
 
     def getEvents(self):
-        uc.loop().run_until_complete(self.getEventSearchResults())
+        asyncio.run(self.getEventSearchResults())
         self.CleanupPastEvents()
 
         
