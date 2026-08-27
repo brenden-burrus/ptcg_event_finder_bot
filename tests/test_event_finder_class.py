@@ -1,4 +1,5 @@
 import asyncio
+import warnings
 
 import pytest
 
@@ -300,6 +301,42 @@ async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_brows
 
     assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
     assert browser.stopped
+
+
+# --- #12: the synchronous entry point runs on a supported event loop ---------
+
+
+def test_getEvents_uses_no_deprecated_zendriver_helper(fake_browser):
+    """Regression test for #12.
+
+    `getEvents` drove the scrape with `uc.loop()`, deprecated in zendriver
+    since 0.5.1 and still called on 0.16.0. It is the only entry point the
+    scheduled job has, so losing it on an upgrade stops the whole job.
+    """
+    fake_browser(FakePage([timed_out()]))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        finder.getEvents()
+
+    deprecated = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert not deprecated, f"deprecated call: {[str(w.message) for w in deprecated]}"
+
+
+def test_getEvents_leaves_no_event_loop_behind(fake_browser):
+    """`uc.loop()` created a loop and never closed it.
+
+    The scheduled job calls `getEvents` once a night for the life of the
+    process, so the loop it opened leaked every run.
+    """
+    fake_browser(FakePage([timed_out()]))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    finder.getEvents()
+
+    with pytest.raises(RuntimeError):
+        asyncio.get_event_loop_policy().get_event_loop()
 
 
 # --- #6: the location constructor argument drives the search -----------------
