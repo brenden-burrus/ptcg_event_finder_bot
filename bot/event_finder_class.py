@@ -1,5 +1,7 @@
 # import nodriver as uc
 import zendriver as uc
+import asyncio
+import re
 import time
 import bs4
 import datetime
@@ -15,6 +17,17 @@ class PokemonEventFinder:
         self.challenge_dicts = []
 
     
+    def describeEmptyResults(self, page_source):
+        # The results page reports its own count, which is what tells a
+        # genuinely empty search apart from a selector that has gone stale.
+        count = re.search(r'(\d+) Play! Pok\S*mon locations found', page_source)
+        if not count:
+            return "no stores found, and the results count could not be read -- the page layout may have changed"
+        if count.group(1) == '0':
+            return "no stores found: the search returned 0 locations"
+        return f"no stores found, but the search reported {count.group(1)} locations -- the 'Game Store' selector may be stale"
+
+
     async def getEventSearchResults(self):
         # Start the broswer and navigate to url
         browser = await uc.start()
@@ -36,7 +49,16 @@ class PokemonEventFinder:
         await browser.wait(5)
         
         # Iterate through all stores found in search results and parse its events
-        store_list = await page.find_all('Game Store')
+        try:
+            store_list = await page.find_all('Game Store')
+        except asyncio.TimeoutError:
+            # zendriver raises instead of returning an empty list when the text
+            # never appears, but matching no stores is a normal outcome -- an
+            # off-season week with no Cups or Challenges scheduled, say. Only
+            # the initial search gets this treatment: a timeout later in the
+            # loop means the page stopped re-rendering, which is a real error.
+            store_list = []
+            print(self.describeEmptyResults(await page.get_content()))
         i = 0
         imax = len(store_list)
         # print(len(store_list))

@@ -6,11 +6,14 @@ name = "pypi"
 [packages]
 zendriver = "*"
 beautifulsoup4 = "*"
+lxml = "*"
 discord = "*"
 python-dotenv = "*"
 apscheduler = "*"
 
 [dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
 
 [requires]
 python_version = "3.12"
