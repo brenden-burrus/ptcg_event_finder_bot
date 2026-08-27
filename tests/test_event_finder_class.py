@@ -200,6 +200,49 @@ def test_unreadable_results_count_is_called_out():
     assert "could not be read" in message
 
 
+# --- parsing a store page (and the lxml parser it needs) ---------------------
+
+
+STORE_PAGE = """
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  <div id="b11-Content">
+    <div class="margin-bottom-base">
+      <div class="event-info__category ph">Cup</div>
+      <div class="event-info__title ph">League Cup</div>
+      <div class="event-info__info-item__location">123 Main St</div>
+      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
+    </div>
+    <div class="margin-bottom-base">
+      <div class="event-info__category ph">Challenge</div>
+      <div class="event-info__title ph">League Challenge</div>
+      <div class="event-info__info-item__location">123 Main St</div>
+      <div class="event-info__info-item__text">Sunday, September 13, 2026</div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+def test_store_page_events_are_split_by_category():
+    """Also pins the lxml dependency.
+
+    `parseStorePage` asks BeautifulSoup for the 'lxml' parser explicitly, so a
+    missing lxml fails here with bs4.FeatureNotFound rather than part-way
+    through a live scrape.
+    """
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    finder.parseStorePage(STORE_PAGE, "https://events.pokemon.com/EventLocator/Store/1")
+
+    assert [event['name'] for event in finder.cup_dicts] == ["League Cup"]
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
+    # The element is located by its aria-label, but the store name comes from
+    # the element's text, so the "Game Store: " prefix is not part of it.
+    assert finder.cup_dicts[0]['store'] == "FORTUNA GAMES"
+    assert finder.cup_dicts[0]['tourney_address'] == "123 Main St"
+
+
 # --- #6: the location constructor argument drives the search -----------------
 
 
