@@ -70,7 +70,7 @@ def events_for_channel(channel_name):
 
 @bot.command(name='events')
 async def send_events(ctx):
-    events, tier = events_for_channel(ctx.channel.name)
+    events, label = events_for_channel(ctx.channel.name)
     relevant_months = F.get_months(events)
     print(relevant_months)
     await F.delete_old_messages(ctx, bot.user.id, relevant_months)
@@ -82,9 +82,9 @@ async def send_events(ctx):
         # back as several messages. Every one of them carries the month in its
         # header, which is what lets the next Refresh find them all -- ADR-0001.
         posts = F.build_month_posts(
-            f"{month} {tier}", [F.format_message(event) for event in this_month]
+            f"{month} {label}", [F.format_message(event) for event in this_month]
         )
-        print(f"Total message length for {month} {tier}: "
+        print(f"Total message length for {month} {label}: "
               f"{sum(len(post) for post in posts)} across {len(posts)} message(s)")
         for post in posts:
             await ctx.send(post)

@@ -5,6 +5,8 @@ Discord's 2000-character limit, so `ctx.send` raised and the whole command
 produced nothing -- including for the months that would have fitted.
 """
 
+import pytest
+
 from bot_functions import DISCORD_MESSAGE_LIMIT, build_month_posts
 
 TITLE = "September League Challenges"
@@ -12,8 +14,22 @@ TITLE = "September League Challenges"
 # The fifteen September League Challenges as they rendered on 2026-09-07, by
 # length. They sum to 2287, which with a header put the Month Post at 2320 --
 # the message Discord rejected.
-SEPTEMBER_2026 = [163, 131, 169, 142, 148, 157, 138, 170, 149, 162, 130, 147,
-                  137, 207, 137]
+SEPTEMBER_2026_EVENT_LENGTHS = [
+    163, 131, 169, 142, 148, 157, 138, 170, 149, 162, 130, 147, 137, 207, 137,
+]
+
+
+def event_of_length(index, length):
+    """An identifiable event of an exact length, so packing can be checked."""
+    marker = f"__{index}__"
+    return marker + "x" * (length - len(marker) - 1) + "\n"
+
+
+def events_of_length(count, length):
+    return [event_of_length(i, length) for i in range(count)]
+
+
+# --- #17: a month too big for one message is split, not dropped --------------
 
 
 def test_a_month_that_fits_is_one_message():
@@ -23,10 +39,11 @@ def test_a_month_that_fits_is_one_message():
 
 
 def test_a_month_that_does_not_fit_is_split():
-    """Three 30-character events cannot share a 100-character message."""
-    events = ["a" * 29 + "\n", "b" * 29 + "\n", "c" * 29 + "\n"]
+    """Regression test for #17: this is the case that raised the 400.
 
-    posts = build_month_posts(TITLE, events, limit=100)
+    Three 30-character events cannot share a 100-character message.
+    """
+    posts = build_month_posts(TITLE, events_of_length(3, 30), limit=100)
 
     assert len(posts) > 1
     assert all(len(post) <= 100 for post in posts), [len(p) for p in posts]
@@ -38,7 +55,7 @@ def test_splitting_never_divides_an_event_or_drops_one():
     Each event is distinguishable, so a divided one shows up as a message
     containing part of its text, and a dropped one as a missing marker.
     """
-    events = [f"__event {i}__\n" + "x" * 20 + "\n" for i in range(12)]
+    events = events_of_length(12, 33)
 
     posts = build_month_posts(TITLE, events, limit=150)
 
@@ -47,11 +64,42 @@ def test_splitting_never_divides_an_event_or_drops_one():
         assert joined.count(e) == 1, f"event mangled or lost: {e!r}"
 
 
+def test_a_month_filling_the_budget_exactly_stays_one_message():
+    """Off-by-one at the boundary is how a limit bug survives its own fix."""
+    posts = build_month_posts(TITLE, ["a" * 79, "b" * 79], limit=200)
+
+    assert len(posts) == 1
+    assert len(posts[0]) <= 200
+
+
+def test_one_character_over_the_budget_splits():
+    posts = build_month_posts(TITLE, ["a" * 79, "b" * 80], limit=200)
+
+    assert len(posts) == 2
+    assert all(len(post) <= 200 for post in posts), [len(p) for p in posts]
+
+
+def test_an_empty_month_produces_no_messages():
+    """A month with nothing in it must not post a lone header."""
+    assert build_month_posts(TITLE, [], limit=100) == []
+
+
+def test_a_limit_too_small_for_the_header_is_refused():
+    """There is no honest answer, so say so rather than exceed the limit.
+
+    Only reachable through the limit parameter the tests use; a caller
+    hitting this has asked for something impossible.
+    """
+    with pytest.raises(ValueError):
+        build_month_posts(TITLE, ["a\n"], limit=10)
+
+
+# --- #17: numbering, and the invariant a Refresh depends on ------------------
+
+
 def test_a_split_month_post_numbers_every_message():
     """A reader has to be able to tell a continued list from a truncated one."""
-    events = ["a" * 29 + "\n", "b" * 29 + "\n", "c" * 29 + "\n"]
-
-    posts = build_month_posts(TITLE, events, limit=110)
+    posts = build_month_posts(TITLE, events_of_length(3, 30), limit=110)
 
     headers = [post.split("\n")[0] for post in posts]
     assert headers == [
@@ -69,33 +117,14 @@ def test_every_message_carries_its_month_on_the_first_line():
     from the header format, because it is the header format's whole reason
     for existing.
     """
-    events = [f"__event {i}__\n" + "x" * 20 + "\n" for i in range(12)]
-
-    posts = build_month_posts(TITLE, events, limit=150)
+    posts = build_month_posts(TITLE, events_of_length(12, 33), limit=150)
 
     assert len(posts) > 1, "this test is pointless without a split"
     for post in posts:
         assert "September" in post.split("\n")[0], post.split("\n")[0]
 
 
-def test_an_empty_month_produces_no_messages():
-    """A month with nothing in it must not post a lone header."""
-    assert build_month_posts(TITLE, [], limit=100) == []
-
-
-def test_the_boundary_itself():
-    """Filling the budget exactly stays one message; one character over splits.
-
-    Off-by-one at the boundary is precisely how a limit bug survives its own
-    fix, so the two cases either side of it are pinned rather than assumed.
-    """
-    exactly = build_month_posts(TITLE, ["a" * 79, "b" * 79], limit=200)
-    assert len(exactly) == 1
-    assert len(exactly[0]) <= 200
-
-    one_over = build_month_posts(TITLE, ["a" * 79, "b" * 80], limit=200)
-    assert len(one_over) == 2
-    assert all(len(post) <= 200 for post in one_over)
+# --- #17: an event that cannot fit alone -------------------------------------
 
 
 def test_an_event_too_long_to_fit_alone_is_truncated_not_dropped():
@@ -106,26 +135,36 @@ def test_an_event_too_long_to_fit_alone_is_truncated_not_dropped():
     tournament from users, and letting it through would raise the same 400
     this whole change exists to stop.
     """
-    events = ["short\n", "L" * 500 + "\n", "also short\n"]
+    events = ["short\n", "__big__" + "L" * 500 + "\n", "also short\n"]
 
     posts = build_month_posts(TITLE, events, limit=120)
 
     assert all(len(post) <= 120 for post in posts), [len(p) for p in posts]
     joined = "".join(posts)
     assert "short\n" in joined and "also short\n" in joined
-    assert "LLLL" in joined, "the oversized event was dropped entirely"
+    # Truncated rather than mangled: it keeps its opening and is marked as cut.
+    assert "__big__LLL" in joined, "the oversized event was dropped or mangled"
+    assert "...\n" in joined, "the truncation is not signalled to the reader"
 
 
-def _event_of_length(index, length):
-    """An identifiable event of an exact length, so packing can be checked."""
-    marker = f"__{index}__"
-    return marker + "x" * (length - len(marker) - 1) + "\n"
+def test_an_oversized_event_gets_a_message_to_itself():
+    """It fills a whole message by construction, so nothing may share it."""
+    events = ["short\n", "__big__" + "L" * 500 + "\n", "also short\n"]
+
+    posts = build_month_posts(TITLE, events, limit=120)
+
+    carrying_big = [post for post in posts if "__big__" in post]
+    assert len(carrying_big) == 1
+    assert "short\n" not in carrying_big[0], "another event shares its message"
+
+
+# --- #17: the reported failure -----------------------------------------------
 
 
 def test_the_september_2026_month_post_that_broke_the_command():
-    """The reported failure, at the real limit rather than a test one."""
-    events = [_event_of_length(i, length)
-              for i, length in enumerate(SEPTEMBER_2026)]
+    """Regression test for #17, at the real limit rather than a test one."""
+    events = [event_of_length(i, length)
+              for i, length in enumerate(SEPTEMBER_2026_EVENT_LENGTHS)]
     assert sum(len(e) for e in events) == 2287, "sample no longer matches #17"
 
     posts = build_month_posts(TITLE, events)
