@@ -59,44 +59,35 @@ async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
 
 
+def events_for_channel(channel_name):
+    """Which tournaments a channel asks for, and what to call them."""
+    if "cup" in channel_name:
+        return CUP_LIST, "League Cups"
+    if "challenge" in channel_name:
+        return CHALLENGE_LIST, "League Challenges"
+    return CHALLENGE_LIST + CUP_LIST, "League Cups and Challenges"
+
+
 @bot.command(name='events')
 async def send_events(ctx):
-    messageText = ""
-    if "cup" in ctx.channel.name:
-        relevant_months = F.get_months(CUP_LIST)
-        print(relevant_months)
-        await F.delete_old_messages(ctx, bot.user.id, F.get_months(CUP_LIST))
-        for month in reversed(relevant_months):
-            messageText = messageText + f"# *{month} League Cups*\n\n"
-            for event in CUP_LIST:
-                if event['date'].split(' ')[1] == month:
-                    messageText = messageText + F.format_message(event)
-            print(f"Total message length for {month} Cups: {len(messageText)}")
-            await ctx.send(messageText)
-            messageText = ""
-    elif "challenge" in ctx.channel.name:
-        relevant_months = F.get_months(CHALLENGE_LIST)
-        print(relevant_months)
-        await F.delete_old_messages(ctx, bot.user.id, F.get_months(CHALLENGE_LIST))
-        for month in reversed(relevant_months):
-            messageText = messageText + f"# *{month} League Challenges*\n\n"
-            for event in CHALLENGE_LIST:
-                if event['date'].split(' ')[1] == month:
-                    messageText = messageText + F.format_message(event)
-            print(f"Total message length for {month} Challenges: {len(messageText)}")
-            await ctx.send(messageText)
-            messageText = ""
-    else:
-        relevant_months = F.get_months(CHALLENGE_LIST + CUP_LIST)
-        print(relevant_months)
-        await F.delete_old_messages(ctx, bot.user.id, F.get_months(CHALLENGE_LIST + CUP_LIST))
-        for month in reversed(relevant_months):
-            messageText = messageText + f"# *{month} League Cups and Challenges*\n\n"
-            for event in CHALLENGE_LIST + CUP_LIST:
-                if event['date'].split(' ')[1] == month:
-                    messageText = messageText + F.format_message(event)
-            await ctx.send(messageText)
-            messageText = ""
+    events, label = events_for_channel(ctx.channel.name)
+    relevant_months = F.get_months(events)
+    print(relevant_months)
+    await F.delete_old_messages(ctx, bot.user.id, relevant_months)
+
+    for month in reversed(relevant_months):
+        this_month = [event for event in events
+                      if event['date'].split(' ')[1] == month]
+        # A month with more tournaments than one Discord message can hold comes
+        # back as several messages. Every one of them carries the month in its
+        # header, which is what lets the next Refresh find them all -- ADR-0001.
+        posts = F.build_month_posts(
+            f"{month} {label}", [F.format_message(event) for event in this_month]
+        )
+        print(f"Total message length for {month} {label}: "
+              f"{sum(len(post) for post in posts)} across {len(posts)} message(s)")
+        for post in posts:
+            await ctx.send(post)
 
 
 bot.run(TOKEN)
