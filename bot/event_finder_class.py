@@ -9,6 +9,31 @@ import calendar
 import os
 
 
+def upcoming_tournaments(tournaments):
+    """Keep only the tournaments still to come.
+
+    A standalone function rather than a method because retained tournament
+    data -- kept when a scrape fails -- has to be filtered the same way, and
+    it no longer belongs to the finder that scraped it.
+    """
+    today = datetime.datetime.now()
+    upcoming = []
+    for tournament in tournaments:
+        month = tournament['date'].split(" ")[1]
+        year = int(tournament['date'].split(" ")[3])
+        day = int(tournament['date'].split(" ")[2].replace(',', ''))
+
+        for y in range(len(calendar.month_name)):
+            if str(calendar.month_name[y]) == str(month):
+                month = y
+                break
+
+        if datetime.datetime(year, month, day) > today:
+            upcoming.append(tournament)
+
+    return upcoming
+
+
 class PokemonEventFinder:
     def __init__(self, event_finder_url, search_location) -> None:
         self.url = event_finder_url
@@ -123,42 +148,10 @@ class PokemonEventFinder:
 
 
     def CleanupPastEvents(self):
-        today = datetime.datetime.now()
-        temp_list = []
-        for i in range(len(self.challenge_dicts)):
-            month = self.challenge_dicts[i]['date'].split(" ")[1]
-            year = int(self.challenge_dicts[i]['date'].split(" ")[3])
-            day = int(self.challenge_dicts[i]['date'].split(" ")[2].replace(',',''))
+        self.challenge_dicts = upcoming_tournaments(self.challenge_dicts)
+        self.cup_dicts = upcoming_tournaments(self.cup_dicts)
 
-            for y in range(len(calendar.month_name)):
-                if str(calendar.month_name[y]) == str(month):
-                    month = y
-                    break
-
-            if datetime.datetime(year, month, day) > today:
-                temp_list.append(self.challenge_dicts[i])
-
-        self.challenge_dicts = temp_list
-
-        temp_list = []
-        for i in range(len(self.cup_dicts)):
-            month = self.cup_dicts[i]['date'].split(" ")[1]
-            year = int(self.cup_dicts[i]['date'].split(" ")[3])
-            day = int(self.cup_dicts[i]['date'].split(" ")[2].replace(',',''))
-
-            for y in range(len(calendar.month_name)):
-                if str(calendar.month_name[y]) == str(month):
-                    month = y
-                    break
-
-            if datetime.datetime(year, month, day) > today:
-                temp_list.append(self.cup_dicts[i])
-
-        self.cup_dicts = temp_list
-        
         return
-
-
 
 
     def getEvents(self):
