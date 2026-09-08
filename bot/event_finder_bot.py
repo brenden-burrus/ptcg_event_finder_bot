@@ -1,4 +1,5 @@
 import os
+import traceback
 
 import discord
 from discord.ext import commands
@@ -7,6 +8,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
+from event_finder_class import cleanup_past_events
 from get_events import getLocalEvents
 import bot_functions as F
 
@@ -26,16 +28,46 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
+def keep_previous_events(reason):
+    """Hold on to the tournaments already stored, and say why.
+
+    A failed scrape used to leave the bot with nothing to post until the next
+    night. Yesterday's tournaments are better than none, but only after the
+    ones that have since happened are dropped: retained data ages, and
+    advertising a tournament that already took place is worse than saying
+    nothing. The reason goes to the terminal alone -- a user in the channel
+    sees an ordinary, slightly stale schedule, which is nothing they could act
+    on anyway.
+    """
+    global CUP_LIST
+    global CHALLENGE_LIST
+    print(f"{reason} {datetime.datetime.now()}: "
+          f"keeping the tournaments from the last good scrape")
+    CUP_LIST = cleanup_past_events(CUP_LIST)
+    CHALLENGE_LIST = cleanup_past_events(CHALLENGE_LIST)
+
+
 def get_events():
+    global CUP_LIST
+    global CHALLENGE_LIST
     try:
-        global CUP_LIST
-        global CHALLENGE_LIST
-        CUP_LIST, CHALLENGE_LIST = getLocalEvents()
-        
-        CUP_LIST = sorted(CUP_LIST, key=itemgetter('date'), reverse=False)
-        CHALLENGE_LIST = sorted(CHALLENGE_LIST, key=itemgetter('date'), reverse=False)
-    except:
-        print(f"Error occured while getting events {datetime.datetime.now()}")
+        cup_list, challenge_list = getLocalEvents()
+    # Exception rather than a bare except: the process runs for months, and
+    # swallowing KeyboardInterrupt and SystemExit here traps whoever is trying
+    # to stop it mid-scrape.
+    except Exception:
+        # The two failures are named apart because they need different fixes:
+        # this one means the scraper is broken.
+        keep_previous_events("Error occured while getting events")
+        traceback.print_exc()
+    else:
+        if not cup_list and not challenge_list:
+            # ...and this one is most likely a genuinely quiet week -- #8: a
+            # scrape finding nothing is a legitimate outcome, not an error.
+            keep_previous_events("No tournaments found")
+        else:
+            CUP_LIST = sorted(cup_list, key=itemgetter('date'), reverse=False)
+            CHALLENGE_LIST = sorted(challenge_list, key=itemgetter('date'), reverse=False)
 
     print(CUP_LIST)
     print("--------------------------------")
