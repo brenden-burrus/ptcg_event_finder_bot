@@ -384,15 +384,30 @@ def test_a_zero_padded_day_reads_the_same():
     assert tournament_date(padded) == datetime.datetime(2026, 9, 5)
 
 
+# The tolerances below are not decoration: they are what the parse this
+# replaced already accepted, by picking the month, day and year out of the
+# string by position. Narrowing them would turn a date the bot used to post
+# into a night of retained data (#18) for no gain.
+
+
 def test_anything_after_the_year_is_ignored():
-    """The parse this replaced took the date apart by position and ignored the
-    rest of the string, so a multi-day or timed date still worked. Keeping that
-    tolerance means a format the locator has never shown us cannot take the
-    nightly scrape down.
-    """
     spanning = {'date': "Saturday, September 12, 2026 - Sunday, September 13, 2026"}
 
     assert tournament_date(spanning) == datetime.datetime(2026, 9, 12)
+
+
+def test_the_weekday_is_not_read():
+    """It is the one part of the string nothing needs, and the part most
+    likely to be shortened by a renderer change.
+    """
+    abbreviated = {'date': "Fri, September 18, 2026"}
+
+    assert tournament_date(abbreviated) == datetime.datetime(2026, 9, 18)
+
+
+def test_the_commas_are_not_required():
+    assert tournament_date({'date': "Friday September 18 2026"}) == \
+        datetime.datetime(2026, 9, 18)
 
 
 # --- #19: tournaments post in the order they happen --------------------------
@@ -434,6 +449,12 @@ def test_a_year_boundary_orders_by_date_not_by_month_name():
 def test_two_tiers_interleave_by_date():
     """A general channel concatenated two separately ordered lists, so every
     League Challenge preceded every League Cup whatever its date -- #19.
+
+    This covers the ordering that branch now sorts by, not the branch itself:
+    `events_for_channel` lives in the command module, which cannot be imported
+    while it runs `bot.run` at import. Reverting it to a bare concatenation
+    would leave this test green -- the known gap #16 accepted, in the same
+    shape.
     """
     cups = [tournament_on(2026, 9, 12, name="League Cup"),
             tournament_on(2026, 9, 26, name="League Cup")]
@@ -453,19 +474,19 @@ def test_two_tiers_interleave_by_date():
 # --- #19: the past-tournament filter, deferred here from #16 -----------------
 
 
-def days_from_today(offset):
+def tournament_days_from_today(offset):
     when = datetime.date.today() + datetime.timedelta(days=offset)
     return tournament_on(when.year, when.month, when.day)
 
 
 def test_a_tournament_still_to_come_is_kept():
-    tournament = days_from_today(3)
+    tournament = tournament_days_from_today(3)
 
     assert upcoming_tournaments([tournament]) == [tournament]
 
 
 def test_a_tournament_that_has_happened_is_dropped():
-    assert upcoming_tournaments([days_from_today(-3)]) == []
+    assert upcoming_tournaments([tournament_days_from_today(-3)]) == []
 
 
 def test_a_tournament_falling_today_is_dropped():
@@ -477,14 +498,14 @@ def test_a_tournament_falling_today_is_dropped():
     that has finished from one starting this evening; dropping both is the
     current answer. Changing it is a product decision, not a refactor.
     """
-    assert upcoming_tournaments([days_from_today(0)]) == []
+    assert upcoming_tournaments([tournament_days_from_today(0)]) == []
 
 
 def test_the_order_tournaments_arrived_in_is_preserved():
     """The filter is not a sort. Callers order the result themselves, and a
     filter that quietly reordered would hide whether they did.
     """
-    later, sooner = days_from_today(9), days_from_today(2)
+    later, sooner = tournament_days_from_today(9), tournament_days_from_today(2)
 
     assert upcoming_tournaments([later, sooner]) == [later, sooner]
 
@@ -494,7 +515,7 @@ def test_filtering_leaves_the_list_it_was_given_alone():
     filter over the stored tournaments, so a filter that mutated in place
     would be filtering the caller's data out from under it.
     """
-    tournaments = [days_from_today(-3), days_from_today(3)]
+    tournaments = [tournament_days_from_today(-3), tournament_days_from_today(3)]
 
     upcoming_tournaments(tournaments)
 
@@ -510,7 +531,7 @@ def test_the_finder_filters_both_tiers():
     duplicated filter to go; this is what stops one tier being reconnected and
     the other forgotten.
     """
-    past, upcoming = days_from_today(-4), days_from_today(4)
+    past, upcoming = tournament_days_from_today(-4), tournament_days_from_today(4)
     finder = PokemonEventFinder(URL, LOCATION)
     finder.cup_dicts = [past, upcoming]
     finder.challenge_dicts = [upcoming, past]

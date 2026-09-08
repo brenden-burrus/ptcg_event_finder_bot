@@ -8,7 +8,7 @@ import datetime
 import os
 
 
-DATE_FORMAT = "%A, %B %d, %Y"
+DATE_FORMAT = "%B %d %Y"
 
 
 def tournament_date(tournament):
@@ -19,13 +19,13 @@ def tournament_date(tournament):
     18th before the 21st before the 12th -- #19. Anything that needs the
     tournaments in order asks here instead.
 
-    Only the first four words are read. The date is sometimes followed by more
-    (a second date, for one thing), and a trailing surprise from a renderer
-    this project does not control must not take a nightly scrape down.
+    Only the month, day and year are read, and commas are not required. The
+    parse this replaced picked those three out by position, so it did not care
+    what the weekday looked like or what followed the year; a renderer this
+    project does not control gets the same latitude here.
     """
-    return datetime.datetime.strptime(
-        " ".join(tournament['date'].split(" ")[:4]), DATE_FORMAT
-    )
+    month, day, year = tournament['date'].replace(",", " ").split()[1:4]
+    return datetime.datetime.strptime(f"{month} {day} {year}", DATE_FORMAT)
 
 
 def upcoming_tournaments(tournaments):

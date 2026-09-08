@@ -5,6 +5,8 @@ Discord's 2000-character limit, so `ctx.send` raised and the whole command
 produced nothing -- including for the months that would have fitted.
 """
 
+import datetime
+
 import pytest
 
 from bot_functions import DISCORD_MESSAGE_LIMIT, build_month_posts, format_message
@@ -183,15 +185,15 @@ def september_tournament(day):
     """A September 2026 tournament, rendered the way the locator renders one.
 
     Store and address are the length of real ones, so fifteen of these overrun
-    a real Discord message the way #17's fifteen did -- 2235 characters against
-    the 2287 reported there. The store name leads with the day so a message can
-    be read back for the order its tournaments are in.
+    a real Discord message the way #17's fifteen did. The weekday is derived
+    rather than written down, because a date paired with the wrong weekday is
+    the one input that would make this test lie. The store name leads with the
+    day, so a message can be read back for the order its tournaments are in.
     """
-    weekday = ["Tuesday", "Wednesday", "Thursday", "Friday",
-               "Saturday", "Sunday", "Monday"][(day - 1) % 7]
+    when = datetime.date(2026, 9, day)
     return {'store': f"STORE {day} GAMES OF GREATER SAINT LOUIS",
             'name': "League Challenge",
-            'date': f"{weekday}, September {day}, 2026",
+            'date': f"{when.strftime('%A')}, September {day}, 2026",
             'tourney_address': "1234 Kingshighway Blvd, Saint Louis, MO 63101",
             'tourney_page': "https://events.pokemon.com/EventLocator/Store/1"}
 
@@ -206,12 +208,13 @@ def test_an_oversized_month_still_splits_once_it_is_in_date_order():
     days = [18, 21, 12, 26, 26, 26, 26, 26, 20, 27, 27, 10, 17, 24, 16]
     ordered = sorted((september_tournament(day) for day in days),
                      key=tournament_date)
+    rendered = [format_message(t) for t in ordered]
+    assert sum(len(text) for text in rendered) > DISCORD_MESSAGE_LIMIT, \
+        "these tournaments now fit in one message, so nothing here is tested"
 
-    posts = build_month_posts(
-        "September League Challenges", [format_message(t) for t in ordered]
-    )
+    posts = build_month_posts("September League Challenges", rendered)
 
-    assert len(posts) > 1, "this test is pointless without a split"
+    assert len(posts) > 1
     assert all(len(post) <= DISCORD_MESSAGE_LIMIT for post in posts), \
         [len(p) for p in posts]
     # Reading the messages in the order they are sent gives the tournaments in

@@ -52,9 +52,10 @@ def get_events():
     try:
         cup_list, challenge_list = getLocalEvents()
         # Ordering by the day a tournament happens, not by the rendered date
-        # string, which sorts by weekday name -- #19. Sorting reads every date,
-        # so one the parser cannot make sense of surfaces here, and a scrape
-        # that produced unusable dates is handled below like any other failure.
+        # string, which sorts by weekday name -- #19. A date the parser cannot
+        # read raises somewhere in here (the scrape's own past-tournament
+        # filter reads them first), which is why the sort belongs inside the
+        # try: unusable dates are a failed scrape, handled like any other.
         cup_list = sorted(cup_list, key=tournament_date)
         challenge_list = sorted(challenge_list, key=tournament_date)
     # Exception rather than a bare except: the process runs for months, and
@@ -117,6 +118,10 @@ async def send_events(ctx):
     print(relevant_months)
     await F.delete_old_messages(ctx, bot.user.id, relevant_months)
 
+    # The months now arrive in date order, so posting them in reverse leaves
+    # the nearest month as the last message in the channel -- the one a reader
+    # sees without scrolling. Before #19 this order was whatever the scrape
+    # happened to produce; it is a choice now, so changing it is one too.
     for month in reversed(relevant_months):
         this_month = [event for event in events
                       if event['date'].split(' ')[1] == month]
