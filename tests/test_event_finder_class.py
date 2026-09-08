@@ -44,15 +44,22 @@ class FakePage:
     `content` is the page source `get_content` returns. Pass a list to serve a
     different source on each call, one per store the loop visits; the last one
     sticks once the list runs down.
+
+    `find_failures` maps a text to the exception instance `find` raises for it,
+    the same convention `store_batches` uses for a batch. Any text not named
+    gets a `FakeElement`.
     """
 
-    def __init__(self, store_batches, content=EMPTY_RESULTS_PAGE):
+    def __init__(self, store_batches, content=EMPTY_RESULTS_PAGE, find_failures=None):
         self.store_batches = list(store_batches)
         self.page_sources = list(content) if isinstance(content, list) else [content]
+        self.find_failures = dict(find_failures or {})
         self.url = "https://events.pokemon.com/EventLocator/Store/1"
         self.location_input = FakeElement()
 
     async def find(self, text, best_match=False):
+        if text in self.find_failures:
+            raise self.find_failures[text]
         return FakeElement()
 
     async def select(self, selector):
@@ -73,10 +80,17 @@ class FakePage:
 
 
 class FakeBrowser:
-    def __init__(self, page):
+    """Stands in for a zendriver browser.
+
+    `stop_error` is raised by `stop`, for the case where closing a browser
+    that has already died is itself what fails.
+    """
+
+    def __init__(self, page, stop_error=None):
         self.page = page
         self.stopped = False
         self.loop = None
+        self.stop_error = stop_error
 
     async def get(self, url):
         return self.page
@@ -89,14 +103,16 @@ class FakeBrowser:
         # on, once the synchronous entry point has returned.
         self.loop = asyncio.get_running_loop()
         self.stopped = True
+        if self.stop_error is not None:
+            raise self.stop_error
 
 
 @pytest.fixture
 def fake_browser(monkeypatch):
     """Swap zendriver's `start` for a fake, and hand the browser back."""
 
-    def _install(page):
-        browser = FakeBrowser(page)
+    def _install(page, stop_error=None):
+        browser = FakeBrowser(page, stop_error)
 
         async def fake_start():
             return browser
@@ -107,8 +123,8 @@ def fake_browser(monkeypatch):
     return _install
 
 
-def timed_out():
-    return asyncio.TimeoutError("time ran out while waiting for text: Game Store")
+def timed_out(text="Game Store"):
+    return asyncio.TimeoutError(f"time ran out while waiting for text: {text}")
 
 
 def tournament_on(year, month, day, name="League Cup"):
@@ -192,12 +208,17 @@ async def test_timeout_after_the_first_store_still_raises(fake_browser):
     be silently reported as a complete, shorter run.
     """
     page = FakePage([[FakeElement(), FakeElement()], timed_out()])
-    fake_browser(page)
+    browser = fake_browser(page)
     finder = PokemonEventFinder(URL, LOCATION)
     finder.parseStorePage = lambda html, url: None
 
     with pytest.raises(asyncio.TimeoutError):
         await finder.getEventSearchResults()
+
+    # It raises, but it still closes on the way out -- #21. This is the one
+    # existing test that exercises the failing path, and it passed for as long
+    # as the browser leaked.
+    assert browser.stopped
 
 
 # --- #8: telling an empty week apart from a stale selector -------------------
@@ -322,6 +343,100 @@ async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_brows
 
     assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
     assert browser.stopped
+
+
+# --- #21: a scrape that fails part-way still closes the browser --------------
+
+
+BACK_BUTTON = "Back to previous screen"
+
+
+def page_failing_at_the_back_button():
+    """One Store, parsed, and then the return to the search results times out.
+
+    The live failure of #15, and the shape most of #21's tests need: far
+    enough in to have banked a League Cup and a League Challenge, and still
+    inside the loop when it goes wrong.
+    """
+    return FakePage([[FakeElement(), FakeElement()]], content=STORE_PAGE,
+                    find_failures={BACK_BUTTON: timed_out(BACK_BUTTON)})
+
+
+async def test_a_back_navigation_that_times_out_closes_the_browser(fake_browser):
+    """The exact live failure that prompted #21.
+
+    Returning from a Store to the search results timed out (#15), the close
+    call sat after the loop, and so the last thing printed was zendriver's
+    atexit fallback hitting a shut-down executor -- not the timeout.
+    """
+    browser = fake_browser(page_failing_at_the_back_button())
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(asyncio.TimeoutError):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped, "a mid-loop failure left the browser running"
+
+
+async def test_a_failure_before_the_store_loop_closes_the_browser(fake_browser):
+    """An early failure must be as clean as a late one.
+
+    The consent banner, the search location box and the search itself all run
+    before the loop is reached, and any of them can fail. The guarded region
+    starts as soon as a browser exists, not where the loop does.
+    """
+    page = FakePage([], find_failures={"Accept All": timed_out("Accept All")})
+    browser = fake_browser(page)
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(asyncio.TimeoutError):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped, "a failure at the consent banner left the browser running"
+
+
+@pytest.mark.parametrize("close_failure", [
+    RuntimeError("the browser was already gone"),
+    # `stop` waits on the browser process, so the await can be cancelled --
+    # and CancelledError is a BaseException, which an `except Exception` on
+    # the failure path lets straight past.
+    asyncio.CancelledError(),
+])
+async def test_a_close_that_fails_does_not_replace_the_real_failure(
+        fake_browser, capsys, close_failure):
+    """The interesting error is always the one that stopped the scrape.
+
+    A browser that has already died can fail to close, and a close raised from
+    the failure path would take the timeout with it -- the exact class of
+    problem #21 exists to remove.
+    """
+    browser = fake_browser(page_failing_at_the_back_button(), stop_error=close_failure)
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(asyncio.TimeoutError):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped, "closing was never attempted"
+    assert "could not be closed" in capsys.readouterr().out, \
+        "the close failure was dropped without a word"
+
+
+async def test_stores_parsed_before_a_mid_loop_failure_are_kept(fake_browser):
+    """Characterisation test: the scrape accumulates onto the instance.
+
+    Whatever League Cups and League Challenges were parsed before the failure
+    are still on the finder when it raises. Nothing reads them today -- the
+    handler above discards them, which is #18 -- but a future change to the
+    failure path could quietly lose them, and this pins that it has not.
+    """
+    fake_browser(page_failing_at_the_back_button())
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(asyncio.TimeoutError):
+        await finder.getEventSearchResults()
+
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
 
 
 # --- #6: the location constructor argument drives the search -----------------

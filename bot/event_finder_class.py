@@ -64,53 +64,75 @@ class PokemonEventFinder:
 
 
     async def getEventSearchResults(self):
-        # Start the broswer and navigate to url
+        # Start the browser and navigate to url. Starting it sits outside the
+        # guarded region below: if starting is what fails there is no browser
+        # to close, and the failure should propagate untouched.
         browser = await uc.start()
-        page = await browser.get(self.url)
-        await browser.wait(5)
-
-        # Enter the search location into the text box and search
-        consent = await page.find("Accept All", best_match=True)
-        await consent.click()
-        await browser.wait(3)
-        test_input = await page.select("#b3-Input_LocationName")
-        await test_input.send_keys(self.search_location)
-        await browser.wait(3)
-        dropdown_option = await page.select('.pac-item')
-        await dropdown_option.mouse_click()
-        await browser.wait(2)
-        search_button = await page.find("Search Locations")
-        await search_button.click()
-        await browser.wait(5)
-        
-        # Iterate through all stores found in search results and parse its events
         try:
-            store_list = await page.find_all('Game Store')
-        except asyncio.TimeoutError:
-            # zendriver raises instead of returning an empty list when the text
-            # never appears, but matching no stores is a normal outcome -- an
-            # off-season week with no Cups or Challenges scheduled, say. Only
-            # the initial search gets this treatment: a timeout later in the
-            # loop means the page stopped re-rendering, which is a real error.
-            store_list = []
-            print(self.describeEmptyResults(await page.get_content()))
-        i = 0
-        imax = len(store_list)
-        # print(len(store_list))
-        while i < imax:
-            await store_list[i].click()
-            await browser.wait(3)
-            html = await page.get_content()
-            page_url = page.url
-            self.parseStorePage(html, page_url)
-            await browser.wait(3)
-            back_button = await page.find("Back to previous screen")
-            await back_button.click()
-            await browser.wait(3)
-            
-            store_list = await page.find_all('Game Store')
-            i += 2
+            page = await browser.get(self.url)
+            await browser.wait(5)
 
+            # Enter the search location into the text box and search
+            consent = await page.find("Accept All", best_match=True)
+            await consent.click()
+            await browser.wait(3)
+            test_input = await page.select("#b3-Input_LocationName")
+            await test_input.send_keys(self.search_location)
+            await browser.wait(3)
+            dropdown_option = await page.select('.pac-item')
+            await dropdown_option.mouse_click()
+            await browser.wait(2)
+            search_button = await page.find("Search Locations")
+            await search_button.click()
+            await browser.wait(5)
+
+            # Iterate through all stores found in search results and parse its events
+            try:
+                store_list = await page.find_all('Game Store')
+            except asyncio.TimeoutError:
+                # zendriver raises instead of returning an empty list when the text
+                # never appears, but matching no stores is a normal outcome -- an
+                # off-season week with no Cups or Challenges scheduled, say. Only
+                # the initial search gets this treatment: a timeout later in the
+                # loop means the page stopped re-rendering, which is a real error.
+                store_list = []
+                print(self.describeEmptyResults(await page.get_content()))
+            i = 0
+            imax = len(store_list)
+            # print(len(store_list))
+            while i < imax:
+                await store_list[i].click()
+                await browser.wait(3)
+                html = await page.get_content()
+                page_url = page.url
+                self.parseStorePage(html, page_url)
+                await browser.wait(3)
+                back_button = await page.find("Back to previous screen")
+                await back_button.click()
+                await browser.wait(3)
+
+                store_list = await page.find_all('Game Store')
+                i += 2
+        except BaseException:
+            # A scrape that fails part-way still closes the browser on its way
+            # out -- #21. Left open, zendriver's atexit fallback stops it while
+            # the event loop is already being torn down, and the shut-down
+            # executor it hits is the last thing printed instead of the real
+            # failure.
+            try:
+                await browser.stop()
+            except BaseException as close_failure:
+                # Never let this replace the exception already in flight: a
+                # browser that has died takes the interesting error with it.
+                # BaseException rather than Exception because stopping waits on
+                # the browser process, so the await can be cancelled -- and a
+                # CancelledError caught here would be the one case that still
+                # hid the real error.
+                print(f"the browser could not be closed: {close_failure!r}")
+            raise
+
+        # On the success path a failure to close is the only failure there is,
+        # so it propagates like any other.
         await browser.stop()
 
         return
