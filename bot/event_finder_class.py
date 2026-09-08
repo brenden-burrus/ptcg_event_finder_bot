@@ -9,7 +9,7 @@ import calendar
 import os
 
 
-def cleanup_past_events(tournaments):
+def upcoming_tournaments(tournaments):
     """Keep only the tournaments still to come.
 
     A standalone function rather than a method because retained tournament
@@ -148,8 +148,8 @@ class PokemonEventFinder:
 
 
     def CleanupPastEvents(self):
-        self.challenge_dicts = cleanup_past_events(self.challenge_dicts)
-        self.cup_dicts = cleanup_past_events(self.cup_dicts)
+        self.challenge_dicts = upcoming_tournaments(self.challenge_dicts)
+        self.cup_dicts = upcoming_tournaments(self.cup_dicts)
 
         return
 

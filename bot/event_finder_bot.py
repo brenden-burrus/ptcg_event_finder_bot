@@ -8,7 +8,7 @@ from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from event_finder_class import cleanup_past_events
+from event_finder_class import upcoming_tournaments
 from get_events import getLocalEvents
 import bot_functions as F
 
@@ -28,7 +28,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
-def keep_previous_events(reason):
+def keep_previous_tournaments(reason):
     """Hold on to the tournaments already stored, and say why.
 
     A failed scrape used to leave the bot with nothing to post until the next
@@ -43,8 +43,8 @@ def keep_previous_events(reason):
     global CHALLENGE_LIST
     print(f"{reason} {datetime.datetime.now()}: "
           f"keeping the tournaments from the last good scrape")
-    CUP_LIST = cleanup_past_events(CUP_LIST)
-    CHALLENGE_LIST = cleanup_past_events(CHALLENGE_LIST)
+    CUP_LIST = upcoming_tournaments(CUP_LIST)
+    CHALLENGE_LIST = upcoming_tournaments(CHALLENGE_LIST)
 
 
 def get_events():
@@ -56,15 +56,16 @@ def get_events():
     # swallowing KeyboardInterrupt and SystemExit here traps whoever is trying
     # to stop it mid-scrape.
     except Exception:
-        # The two failures are named apart because they need different fixes:
-        # this one means the scraper is broken.
-        keep_previous_events("Error occured while getting events")
+        # A scrape that raises means the scraper is broken, so the traceback is
+        # the useful part. The two failures are worded apart on the terminal
+        # because they call for different responses from the owner.
+        keep_previous_tournaments("Error occurred while getting events")
         traceback.print_exc()
     else:
         if not cup_list and not challenge_list:
-            # ...and this one is most likely a genuinely quiet week -- #8: a
-            # scrape finding nothing is a legitimate outcome, not an error.
-            keep_previous_events("No tournaments found")
+            # A scrape that runs and finds nothing is most likely a quiet week,
+            # not a fault -- #8: finding no tournaments is a legitimate outcome.
+            keep_previous_tournaments("No tournaments found")
         else:
             CUP_LIST = sorted(cup_list, key=itemgetter('date'), reverse=False)
             CHALLENGE_LIST = sorted(challenge_list, key=itemgetter('date'), reverse=False)
