@@ -1,10 +1,15 @@
 import asyncio
+import datetime
 import warnings
 
 import pytest
 
 import event_finder_class
-from event_finder_class import PokemonEventFinder
+from event_finder_class import (
+    PokemonEventFinder,
+    tournament_date,
+    upcoming_tournaments,
+)
 
 URL = "https://events.pokemon.com/EventLocator/Home?filters=league_cup,league_challenge,tcg"
 LOCATION = "St. Louis, MO, USA"
@@ -104,6 +109,18 @@ def fake_browser(monkeypatch):
 
 def timed_out():
     return asyncio.TimeoutError("time ran out while waiting for text: Game Store")
+
+
+def tournament_on(year, month, day, name="League Cup"):
+    """A tournament carrying the date string the event locator renders.
+
+    The weekday is derived rather than written out, so a test states the date
+    it means and cannot accidentally pair it with the wrong day name -- which
+    is exactly the pairing #19 is about.
+    """
+    when = datetime.date(year, month, day)
+    return {'date': f"{when.strftime('%A')}, {when.strftime('%B')} {day}, {year}",
+            'name': name}
 
 
 # --- #8: an empty search is not an error -------------------------------------
@@ -347,6 +364,192 @@ def test_getEvents_calls_nothing_deprecated(fake_browser):
         and w.filename.endswith("event_finder_class.py")
     ]
     assert not ours, f"deprecated call: {[str(w.message) for w in ours]}"
+
+
+# --- #19: reading the day a tournament happens -------------------------------
+
+
+def test_the_rendered_date_reads_back_as_the_day_it_happens():
+    assert tournament_date(tournament_on(2026, 9, 18)) == datetime.datetime(2026, 9, 18)
+
+
+def test_a_zero_padded_day_reads_the_same():
+    """The locator is a remote renderer this project does not control.
+
+    Nothing observed pads the day, but a padded one must not crash a scrape
+    that would otherwise have worked.
+    """
+    padded = {'date': "Saturday, September 05, 2026"}
+
+    assert tournament_date(padded) == datetime.datetime(2026, 9, 5)
+
+
+# The tolerances below are not decoration: they are what the parse this
+# replaced already accepted, by picking the month, day and year out of the
+# string by position. Narrowing them would turn a date the bot used to post
+# into a night of retained data (#18) for no gain.
+
+
+def test_anything_after_the_year_is_ignored():
+    spanning = {'date': "Saturday, September 12, 2026 - Sunday, September 13, 2026"}
+
+    assert tournament_date(spanning) == datetime.datetime(2026, 9, 12)
+
+
+def test_the_weekday_is_not_read():
+    """It is the one part of the string nothing needs, and the part most
+    likely to be shortened by a renderer change.
+    """
+    abbreviated = {'date': "Fri, September 18, 2026"}
+
+    assert tournament_date(abbreviated) == datetime.datetime(2026, 9, 18)
+
+
+def test_the_commas_are_not_required():
+    assert tournament_date({'date': "Friday September 18 2026"}) == \
+        datetime.datetime(2026, 9, 18)
+
+
+# --- #19: tournaments post in the order they happen --------------------------
+
+
+SEPTEMBER_2026_DAYS = [18, 21, 12, 26, 26, 26, 26, 26, 20, 27, 27, 10, 17, 24, 16]
+
+
+def test_tournaments_sort_into_the_order_they_happen():
+    """Regression test for #19.
+
+    Ordering came from sorting the rendered date string, so 'Friday, September
+    18' sorted before 'Monday, September 21' before 'Saturday, September 12':
+    by weekday name. These are the September tournaments as they posted on
+    2026-09-07, in the order the bug put them in.
+    """
+    tournaments = [tournament_on(2026, 9, day) for day in SEPTEMBER_2026_DAYS]
+
+    ordered = sorted(tournaments, key=tournament_date)
+
+    assert [tournament_date(t).day for t in ordered] == sorted(SEPTEMBER_2026_DAYS)
+
+
+def test_a_year_boundary_orders_by_date_not_by_month_name():
+    """December must precede January when January is the following year.
+
+    Sorting on anything drawn from the rendered string puts April first and
+    January second; only the date gets this right.
+    """
+    december = tournament_on(2026, 12, 30)
+    january = tournament_on(2027, 1, 3)
+    april = tournament_on(2027, 4, 1)
+
+    ordered = sorted([april, january, december], key=tournament_date)
+
+    assert ordered == [december, january, april]
+
+
+def test_two_tiers_interleave_by_date():
+    """A general channel concatenated two separately ordered lists, so every
+    League Challenge preceded every League Cup whatever its date -- #19.
+
+    This covers the ordering that branch now sorts by, not the branch itself:
+    `events_for_channel` lives in the command module, which cannot be imported
+    while it runs `bot.run` at import. Reverting it to a bare concatenation
+    would leave this test green -- the known gap #16 accepted, in the same
+    shape.
+    """
+    cups = [tournament_on(2026, 9, 12, name="League Cup"),
+            tournament_on(2026, 9, 26, name="League Cup")]
+    challenges = [tournament_on(2026, 9, 10, name="League Challenge"),
+                  tournament_on(2026, 9, 20, name="League Challenge")]
+
+    ordered = sorted(challenges + cups, key=tournament_date)
+
+    assert [(tournament_date(t).day, t['name']) for t in ordered] == [
+        (10, "League Challenge"),
+        (12, "League Cup"),
+        (20, "League Challenge"),
+        (26, "League Cup"),
+    ]
+
+
+# --- #19: the past-tournament filter, deferred here from #16 -----------------
+
+
+def tournament_days_from_today(offset):
+    when = datetime.date.today() + datetime.timedelta(days=offset)
+    return tournament_on(when.year, when.month, when.day)
+
+
+def test_a_tournament_still_to_come_is_kept():
+    tournament = tournament_days_from_today(3)
+
+    assert upcoming_tournaments([tournament]) == [tournament]
+
+
+def test_a_tournament_that_has_happened_is_dropped():
+    assert upcoming_tournaments([tournament_days_from_today(-3)]) == []
+
+
+def test_a_tournament_falling_today_is_kept():
+    """The boundary the whole filter turns on.
+
+    It used to compare midnight on the tournament's day against the moment the
+    scrape ran, so a tournament today vanished from 00:00 onwards -- including
+    from the nightly scrape at 01:00, which is every tournament's own morning.
+    The data carries no start time, so a tournament today may be this evening;
+    showing one that has finished is a smaller harm than hiding one a player
+    could still get to.
+    """
+    today = tournament_days_from_today(0)
+
+    assert upcoming_tournaments([today]) == [today]
+
+
+def test_a_tournament_yesterday_is_still_dropped():
+    """The other side of that boundary, so 'keep today' cannot slide into
+    'keep everything'.
+    """
+    assert upcoming_tournaments([tournament_days_from_today(-1)]) == []
+
+
+def test_the_order_tournaments_arrived_in_is_preserved():
+    """The filter is not a sort. Callers order the result themselves, and a
+    filter that quietly reordered would hide whether they did.
+    """
+    later, sooner = tournament_days_from_today(9), tournament_days_from_today(2)
+
+    assert upcoming_tournaments([later, sooner]) == [later, sooner]
+
+
+def test_filtering_leaves_the_list_it_was_given_alone():
+    """Callers rebind their list to the result; retention (#18) reruns the
+    filter over the stored tournaments, so a filter that mutated in place
+    would be filtering the caller's data out from under it.
+    """
+    tournaments = [tournament_days_from_today(-3), tournament_days_from_today(3)]
+
+    upcoming_tournaments(tournaments)
+
+    assert len(tournaments) == 2
+
+
+def test_an_empty_list_filters_to_an_empty_list():
+    assert upcoming_tournaments([]) == []
+
+
+def test_the_finder_filters_both_tiers():
+    """`CleanupPastEvents` delegates twice, once per tier. #16 asked for the
+    duplicated filter to go; this is what stops one tier being reconnected and
+    the other forgotten.
+    """
+    past, upcoming = tournament_days_from_today(-4), tournament_days_from_today(4)
+    finder = PokemonEventFinder(URL, LOCATION)
+    finder.cup_dicts = [past, upcoming]
+    finder.challenge_dicts = [upcoming, past]
+
+    finder.CleanupPastEvents()
+
+    assert finder.cup_dicts == [upcoming]
+    assert finder.challenge_dicts == [upcoming]
 
 
 def test_getEvents_closes_the_loop_it_opened(fake_browser):

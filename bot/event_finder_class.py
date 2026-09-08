@@ -5,8 +5,27 @@ import re
 import time
 import bs4
 import datetime
-import calendar
 import os
+
+
+DATE_FORMAT = "%B %d %Y"
+
+
+def tournament_date(tournament):
+    """The day a tournament happens, read out of the date the locator renders.
+
+    The locator gives a date as 'Friday, September 18, 2026'. Sorting those
+    strings sorts by weekday name, which is how a Month Post came to list the
+    18th before the 21st before the 12th -- #19. Anything that needs the
+    tournaments in order asks here instead.
+
+    Only the month, day and year are read, and commas are not required. The
+    parse this replaced picked those three out by position, so it did not care
+    what the weekday looked like or what followed the year; a renderer this
+    project does not control gets the same latitude here.
+    """
+    month, day, year = tournament['date'].replace(",", " ").split()[1:4]
+    return datetime.datetime.strptime(f"{month} {day} {year}", DATE_FORMAT)
 
 
 def upcoming_tournaments(tournaments):
@@ -15,23 +34,14 @@ def upcoming_tournaments(tournaments):
     A standalone function rather than a method because retained tournament
     data -- kept when a scrape fails -- has to be filtered the same way, and
     it no longer belongs to the finder that scraped it.
+
+    Today counts as still to come. The scraped date carries no start time, so
+    a tournament today could as easily be this evening as this morning, and
+    hiding one a player could still get to is the worse of the two mistakes.
     """
-    today = datetime.datetime.now()
-    upcoming = []
-    for tournament in tournaments:
-        month = tournament['date'].split(" ")[1]
-        year = int(tournament['date'].split(" ")[3])
-        day = int(tournament['date'].split(" ")[2].replace(',', ''))
-
-        for y in range(len(calendar.month_name)):
-            if str(calendar.month_name[y]) == str(month):
-                month = y
-                break
-
-        if datetime.datetime(year, month, day) > today:
-            upcoming.append(tournament)
-
-    return upcoming
+    today = datetime.date.today()
+    return [tournament for tournament in tournaments
+            if tournament_date(tournament).date() >= today]
 
 
 class PokemonEventFinder:
