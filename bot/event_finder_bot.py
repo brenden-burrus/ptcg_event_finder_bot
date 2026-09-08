@@ -4,11 +4,10 @@ import traceback
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from operator import itemgetter
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
-from event_finder_class import upcoming_tournaments
+from event_finder_class import tournament_date, upcoming_tournaments
 from get_events import getLocalEvents
 import bot_functions as F
 
@@ -52,6 +51,12 @@ def get_events():
     global CHALLENGE_LIST
     try:
         cup_list, challenge_list = getLocalEvents()
+        # Ordering by the day a tournament happens, not by the rendered date
+        # string, which sorts by weekday name -- #19. Sorting reads every date,
+        # so one the parser cannot make sense of surfaces here, and a scrape
+        # that produced unusable dates is handled below like any other failure.
+        cup_list = sorted(cup_list, key=tournament_date)
+        challenge_list = sorted(challenge_list, key=tournament_date)
     # Exception rather than a bare except: the process runs for months, and
     # swallowing KeyboardInterrupt and SystemExit here traps whoever is trying
     # to stop it mid-scrape.
@@ -67,8 +72,8 @@ def get_events():
             # not a fault -- #8: finding no tournaments is a legitimate outcome.
             keep_previous_tournaments("No tournaments found")
         else:
-            CUP_LIST = sorted(cup_list, key=itemgetter('date'), reverse=False)
-            CHALLENGE_LIST = sorted(challenge_list, key=itemgetter('date'), reverse=False)
+            CUP_LIST = cup_list
+            CHALLENGE_LIST = challenge_list
 
     print(CUP_LIST)
     print("--------------------------------")
@@ -98,7 +103,11 @@ def events_for_channel(channel_name):
         return CUP_LIST, "League Cups"
     if "challenge" in channel_name:
         return CHALLENGE_LIST, "League Challenges"
-    return CHALLENGE_LIST + CUP_LIST, "League Cups and Challenges"
+    # Each list is in date order, but running one after the other is not: that
+    # put every League Challenge before every League Cup whatever the dates
+    # were -- #19. Merging them needs the sort again.
+    return sorted(CHALLENGE_LIST + CUP_LIST, key=tournament_date), \
+        "League Cups and Challenges"
 
 
 @bot.command(name='events')
