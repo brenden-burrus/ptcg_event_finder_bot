@@ -35,12 +35,13 @@ def upcoming_tournaments(tournaments):
     data -- kept when a scrape fails -- has to be filtered the same way, and
     it no longer belongs to the finder that scraped it.
 
-    A tournament happening today counts as past: its date carries no start
-    time, so midnight is all there is to compare against.
+    Today counts as still to come. The scraped date carries no start time, so
+    a tournament today could as easily be this evening as this morning, and
+    hiding one a player could still get to is the worse of the two mistakes.
     """
-    now = datetime.datetime.now()
+    today = datetime.date.today()
     return [tournament for tournament in tournaments
-            if tournament_date(tournament) > now]
+            if tournament_date(tournament).date() >= today]
 
 
 class PokemonEventFinder:

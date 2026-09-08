@@ -489,16 +489,26 @@ def test_a_tournament_that_has_happened_is_dropped():
     assert upcoming_tournaments([tournament_days_from_today(-3)]) == []
 
 
-def test_a_tournament_falling_today_is_dropped():
-    """Pins today's behaviour rather than endorsing it.
+def test_a_tournament_falling_today_is_kept():
+    """The boundary the whole filter turns on.
 
-    The filter compares midnight on the tournament's day against the moment it
-    runs, so a tournament happening today reads as past from 00:00 onwards.
-    The scraped data carries no start time, so the bot cannot tell a tournament
-    that has finished from one starting this evening; dropping both is the
-    current answer. Changing it is a product decision, not a refactor.
+    It used to compare midnight on the tournament's day against the moment the
+    scrape ran, so a tournament today vanished from 00:00 onwards -- including
+    from the nightly scrape at 01:00, which is every tournament's own morning.
+    The data carries no start time, so a tournament today may be this evening;
+    showing one that has finished is a smaller harm than hiding one a player
+    could still get to.
     """
-    assert upcoming_tournaments([tournament_days_from_today(0)]) == []
+    today = tournament_days_from_today(0)
+
+    assert upcoming_tournaments([today]) == [today]
+
+
+def test_a_tournament_yesterday_is_still_dropped():
+    """The other side of that boundary, so 'keep today' cannot slide into
+    'keep everything'.
+    """
+    assert upcoming_tournaments([tournament_days_from_today(-1)]) == []
 
 
 def test_the_order_tournaments_arrived_in_is_preserved():
