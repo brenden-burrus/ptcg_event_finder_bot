@@ -11,6 +11,11 @@ import os
 
 DATE_FORMAT = "%B %d %Y"
 
+# What a missing Upcoming Events section most likely means, said the same way
+# for one page (#26) and for a whole scrape (#27), so a maintainer searching
+# the logs for one finds the other.
+STORE_PAGE_LAYOUT_MAY_HAVE_CHANGED = "the Store page layout may have changed"
+
 
 def tournament_date(tournament):
     """The day a tournament happens, read out of the date the locator renders.
@@ -45,6 +50,20 @@ def upcoming_tournaments(tournaments):
     today = datetime.date.today()
     return [tournament for tournament in tournaments
             if tournament_date(tournament).date() >= today]
+
+
+def find_upcoming_events_section(soup):
+    """The Upcoming Events section of a Store page, or None if it has none.
+
+    Found by what its heading says, not by its id. The locator numbers its
+    sections by position, and has renumbered them twice; the second time, the
+    id the scrape read moved onto the Store's contact details -- #26. The
+    heading is English because the search URL pins the locale to en-US.
+    """
+    for title in soup.find_all('div', class_='custom-section__header__title'):
+        if title.get_text(strip=True) == "Upcoming Events":
+            return title.find_parent('div', class_='custom-section')
+    return None
 
 
 class StorePageResult(enum.Enum):
@@ -147,7 +166,7 @@ class PokemonEventFinder:
             if (StorePageResult.NO_UPCOMING_EVENTS_SECTION in page_results
                     and StorePageResult.READ not in page_results):
                 raise RuntimeError("no Store page had an Upcoming Events section"
-                                   " -- the Store page layout may have changed")
+                                   f" -- {STORE_PAGE_LAYOUT_MAY_HAVE_CHANGED}")
         except BaseException:
             # A scrape that fails part-way still closes the browser on its way
             # out -- #21. Left open, zendriver's atexit fallback stops it while
@@ -173,18 +192,6 @@ class PokemonEventFinder:
         return
 
 
-    def findUpcomingEventsSection(self, soup):
-        # Found by what its heading says, not by its id. The locator numbers
-        # its sections by position, and has renumbered them twice; the second
-        # time, the id the scrape read moved onto the Store's contact details
-        # -- #26. The heading is English because the search URL pins the
-        # locale to en-US.
-        for title in soup.find_all('div', class_='custom-section__header__title'):
-            if title.get_text(strip=True) == "Upcoming Events":
-                return title.find_parent('div', class_='custom-section')
-        return None
-
-
     def parseStorePage(self, page_source, page_url):
         # Returns how the page came out, for the scrape's run-level check
         # (#27): see StorePageResult.
@@ -197,14 +204,14 @@ class PokemonEventFinder:
             print("no store name")
             return StorePageResult.NO_STORE_NAME
         store_name = store_name_el.get_text()
-        upcoming_events = self.findUpcomingEventsSection(soup)
+        upcoming_events = find_upcoming_events_section(soup)
         if not upcoming_events:
             # Taken as not a quiet Store: a quiet one is expected to keep the
             # heading with nothing under it. Every Store page seen so far has
             # had the heading, but none of them was quiet -- #26. Skipping just
             # this page keeps the rest of the run, as for an unnamed page, but
             # the message says what it most likely means.
-            print(f"{store_name}: no Upcoming Events section -- the Store page layout may have changed")
+            print(f"{store_name}: no Upcoming Events section -- {STORE_PAGE_LAYOUT_MAY_HAVE_CHANGED}")
             return StorePageResult.NO_UPCOMING_EVENTS_SECTION
         # One event-info block is one tournament. The wrapper around each one
         # is no use: the Calendar widget in the same section shares it, and
