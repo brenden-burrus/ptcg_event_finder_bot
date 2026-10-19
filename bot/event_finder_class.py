@@ -169,7 +169,9 @@ class PokemonEventFinder:
         # has no tournament type to read -- #26.
         event_cards = upcoming_events.find_all('div', class_='event-info')
         if not event_cards:
-            print("no event cards")
+            # A quiet Store: the section is there and lists nothing. A normal
+            # week for plenty of Stores, so it is said plainly.
+            print(f"{store_name}: no upcoming tournaments")
             return
 
         print(f"{store_name}")

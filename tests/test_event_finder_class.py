@@ -411,6 +411,59 @@ async def test_the_real_store_page_yields_its_league_challenge(fake_browser):
     assert browser.stopped
 
 
+def two_stores(first, second):
+    """A search that finds two Stores, visited in this order."""
+    stores = [FakeElement() for _ in range(4)]
+    return FakePage([stores, stores, stores], content=[first, second])
+
+
+# How the real page wraps its Calendar widget, cut down: in the Upcoming
+# Events section, in the wrapper a tournament also uses, with no event-info.
+CALENDAR_WIDGET = """
+      <div class="margin-bottom-xxl"><div class="margin-bottom-base">
+        <div class="custom-section" id="b21-b1-Section">
+          <div class="custom-section__header">
+            <div class="custom-section__header__title"><span>Calendar</span></div>
+          </div>
+          <div id="b21-b1-Content">
+            <span>Tap below to load recent and upcoming events.</span>
+            <button type="button">View Calendar</button>
+          </div>
+        </div>
+      </div></div>
+"""
+
+QUIET_STORE_PAGE = f"""
+<html><body>
+  <span aria-label="Game Store: QUIET GAMES">QUIET GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">{CALENDAR_WIDGET}</div>
+  </div>
+</body></html>
+"""
+
+
+async def test_a_quiet_store_is_skipped_and_the_run_carries_on(fake_browser, capsys):
+    """A Store with nothing scheduled is a normal outcome, said plainly.
+
+    Only its name and that it was quiet: nothing about a layout change, which
+    is the message for a page the scrape could not read.
+    """
+    browser = fake_browser(two_stores(QUIET_STORE_PAGE, STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert "QUIET GAMES: no upcoming tournaments" in capsys.readouterr().out.splitlines()
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert [event['store'] for event in finder.challenge_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
 # --- #21: a scrape that fails part-way still closes the browser --------------
 
 
