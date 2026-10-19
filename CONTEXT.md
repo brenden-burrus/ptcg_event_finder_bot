@@ -19,6 +19,10 @@ _Avoid_: Challenge event, tourney
 The venue hosting a League Cup or League Challenge, as named on the event locator.
 _Avoid_: Location, shop, venue
 
+**Quiet Store**:
+A Store that has no upcoming League Cups or League Challenges listed on the event locator. A normal state for a Store, not a fault.
+_Avoid_: Empty store, inactive store
+
 ### Posting
 
 **Month Post**:

@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import pathlib
 import warnings
 
 import pytest
@@ -252,23 +253,50 @@ def test_unreadable_results_count_is_called_out():
 # --- parsing a store page (and the lxml parser it needs) ---------------------
 
 
-STORE_PAGE = """
-<html><body>
-  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
-  <div id="b11-Content">
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Cup</div>
-      <div class="event-info__title ph">League Cup</div>
-      <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
+# The hand-written pages follow the layout the locator served on 2026-10-18
+# (#26), cut down to what the parser reads. The contact details sit under the
+# id the scrape used to read tournaments from, so going back to that id fails
+# here as well as against the real page.
+CONTACT_DETAILS = """
+  <div class="custom-section" id="b11-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title">League Contact Information</div>
     </div>
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Challenge</div>
-      <div class="event-info__title ph">League Challenge</div>
+    <div id="b11-Content">
       <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Sunday, September 13, 2026</div>
     </div>
   </div>
+"""
+
+UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE = """
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">
+      <div class='"list list-group" OSFillParent' data-list="">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Cup</div>
+          <div class="event-info__title ph">League Cup</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Saturday, September 12, 2026 01:00 PM</div>
+        </div></div>
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+"""
+
+STORE_PAGE = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  {UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE}
 </body></html>
 """
 
@@ -295,16 +323,11 @@ def test_store_page_events_are_split_by_category():
 # --- #9: a page without a store name must not sink the whole run -------------
 
 
-PAGE_WITHOUT_A_STORE_NAME = """
+# Tournaments and all, so the missing name is the only reason to skip it.
+PAGE_WITHOUT_A_STORE_NAME = f"""
 <html><body>
-  <div id="b11-Content">
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Cup</div>
-      <div class="event-info__title ph">League Cup</div>
-      <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
-    </div>
-  </div>
+  {CONTACT_DETAILS}
+  {UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE}
 </body></html>
 """
 
@@ -342,6 +365,309 @@ async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_brows
     await finder.getEventSearchResults()
 
     assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
+# --- #26: a Store's tournaments are found under its Upcoming Events heading ---
+
+
+# A real Store page, trimmed -- the comment at the top of it says how. Every
+# Store page test before this one was hand-written, and a hand-written page
+# kept passing for as long as it matched the parser rather than the locator.
+FORTUNA_GAMES_PAGE = (pathlib.Path(__file__).parent
+                      / "fortuna_games_store_page.html").read_text(encoding="utf-8")
+
+
+def one_store(content):
+    """A search that finds one Store, whose page is `content`.
+
+    Two 'Game Store' matches per Store, hence the stride of two in the loop.
+    """
+    stores = [FakeElement(), FakeElement()]
+    return FakePage([stores, stores], content=content)
+
+
+async def test_the_real_store_page_yields_its_league_challenge(fake_browser):
+    """Regression test for #26.
+
+    The locator renumbered the sections on a Store page, so the id the scrape
+    read tournaments from came to hold the Store's contact details, and every
+    Store parsed as having none. The section next to it also wraps a Calendar
+    widget the way it wraps a tournament, and reading that as one crashed.
+    """
+    browser = fake_browser(one_store(FORTUNA_GAMES_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == [{
+        'store': "FORTUNA GAMES",
+        'name': "League Challenge",
+        # The start time is kept as the locator renders it, so Month Posts
+        # show it.
+        'date': "Saturday, October 24, 2026 03:00 PM",
+        'tourney_page': "https://events.pokemon.com/EventLocator/Store/1",
+        'tourney_address': "2632 S KINGSHIGHWAY BLVD, ST. LOUIS, MO 63139, US",
+    }]
+    assert browser.stopped
+
+
+def two_stores(first, second):
+    """A search that finds two Stores, visited in this order."""
+    stores = [FakeElement() for _ in range(4)]
+    return FakePage([stores, stores, stores], content=[first, second])
+
+
+# How the real page wraps its Calendar widget, cut down: in the Upcoming
+# Events section, in the wrapper a tournament also uses, with no event-info.
+CALENDAR_WIDGET = """
+      <div class="margin-bottom-xxl"><div class="margin-bottom-base">
+        <div class="custom-section" id="b21-b1-Section">
+          <div class="custom-section__header">
+            <div class="custom-section__header__title"><span>Calendar</span></div>
+          </div>
+          <div id="b21-b1-Content">
+            <span>Tap below to load recent and upcoming events.</span>
+            <button type="button">View Calendar</button>
+          </div>
+        </div>
+      </div></div>
+"""
+
+QUIET_STORE_PAGE = f"""
+<html><body>
+  <span aria-label="Game Store: QUIET GAMES">QUIET GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">{CALENDAR_WIDGET}</div>
+  </div>
+</body></html>
+"""
+
+
+async def test_a_quiet_store_is_skipped_and_the_run_carries_on(fake_browser, capsys):
+    """A Store with nothing scheduled is a normal outcome, said plainly.
+
+    Only its name and that it was quiet: nothing about a layout change, which
+    is the message for a page the scrape could not read.
+    """
+    browser = fake_browser(two_stores(QUIET_STORE_PAGE, STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert "QUIET GAMES: no upcoming tournaments" in capsys.readouterr().out.splitlines()
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert [event['store'] for event in finder.challenge_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
+# The Calendar widget once it has something in it. Today it shows only a
+# button, but "Tap below to load recent and upcoming events" says what it
+# would hold, and recent ones may already have happened.
+STORE_PAGE_WITH_AN_EVENT_IN_ITS_CALENDAR = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">
+      <div class='"list list-group" OSFillParent' data-list="">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
+      <div class="margin-bottom-xxl"><div class="margin-bottom-base">
+        <div class="custom-section" id="b21-b1-Section">
+          <div class="custom-section__header">
+            <div class="custom-section__header__title"><span>Calendar</span></div>
+          </div>
+          <div id="b21-b1-Content">
+            <div class="event-info">
+              <div class="event-info__category ph">Cup</div>
+              <div class="event-info__title ph">League Cup</div>
+              <div class="event-info__info-item__location">123 Main St</div>
+              <div class="event-info__info-item__text">Saturday, August 15, 2026 01:00 PM</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+async def test_an_event_in_the_calendar_is_not_read_as_a_tournament(fake_browser):
+    """Only the Upcoming Events section's own tournaments are read.
+
+    The Calendar is a section of its own, nested inside Upcoming Events, so
+    a search of everything under the heading reaches into it -- #26.
+    """
+    browser = fake_browser(one_store(STORE_PAGE_WITH_AN_EVENT_IN_ITS_CALENDAR))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
+    assert browser.stopped
+
+
+# The same tournament with the list around it marked up differently: an extra
+# wrapper, and no data-list mark.
+STORE_PAGE_WITH_ITS_LIST_RESHUFFLED = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b17-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b17-Content"><div class="list-wrapper">
+      <div class="list list-group">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
+    </div>{CALENDAR_WIDGET}</div>
+  </div>
+</body></html>
+"""
+
+
+async def test_a_reshuffled_list_still_yields_its_tournaments(fake_browser):
+    """Keeping the Calendar out must not tie the scrape to the list's markup.
+
+    Were it tied, a reshuffle there would read every Store as a Quiet Store:
+    the section is still found, so the run-level check (#27) cannot tell that
+    from a quiet week, and the bot falls silent again the way #26 began.
+    """
+    browser = fake_browser(one_store(STORE_PAGE_WITH_ITS_LIST_RESHUFFLED))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
+    assert browser.stopped
+
+
+# A named Store page with its contact details and no Upcoming Events section:
+# what every Store page would look like to the scrape if the heading moved.
+PAGE_WITHOUT_UPCOMING_EVENTS = f"""
+<html><body>
+  <span aria-label="Game Store: ODD GAMES">ODD GAMES</span>
+  {CONTACT_DETAILS}
+</body></html>
+"""
+
+
+async def test_a_store_page_without_upcoming_events_is_skipped_as_a_layout_change(
+        fake_browser, capsys):
+    """One page the scrape cannot read costs only itself, as under #9.
+
+    It is not a quiet Store, though, and must not read like one: the message
+    names the likely cause, so the next renumbering is not mistaken for an
+    empty week.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS, STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    odd_store = [line for line in capsys.readouterr().out.splitlines()
+                 if line.startswith("ODD GAMES")]
+    assert len(odd_store) == 1
+    assert "Upcoming Events" in odd_store[0]
+    assert "layout may have changed" in odd_store[0]
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert [event['store'] for event in finder.challenge_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
+# --- #27: no Store page with Upcoming Events is a failed scrape --------------
+
+
+async def test_a_scrape_where_no_store_page_has_upcoming_events_raises(fake_browser):
+    """Regression test for #27.
+
+    Every Store printed `no event cards`, the scrape finished as if nothing
+    were wrong, and the handler read the empty result as a quiet week. A
+    layout change that hits every Store has to fail the scrape instead, and
+    still close the browser on the way out, as #21 asks of any failure.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS,
+                                      PAGE_WITHOUT_UPCOMING_EVENTS))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(RuntimeError, match="layout may have changed"):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped
+
+
+async def test_a_quiet_store_counts_as_having_upcoming_events(fake_browser):
+    """A quiet Store's page has the section, with nothing under it.
+
+    That is the page reading correctly, so it is enough on its own to show
+    the layout still works: the odd page beside it is skipped (#26), and the
+    run is a quiet one, not a failed one.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS, QUIET_STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == []
+    assert browser.stopped
+
+
+async def test_an_unnamed_page_does_not_count_as_having_upcoming_events(fake_browser):
+    """A page skipped for having no Store name (#9) is never read further.
+
+    This one has the section, tournaments and all, but the scrape cannot
+    know that without reading a page it has already skipped. So it is no
+    evidence the layout still works, and the named page beside it decides.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_A_STORE_NAME,
+                                      PAGE_WITHOUT_UPCOMING_EVENTS))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(RuntimeError, match="layout may have changed"):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped
+
+
+async def test_a_scrape_of_only_unnamed_pages_does_not_raise(fake_browser):
+    """Nor is an unnamed page evidence the layout broke. With no named page
+    parsed, the rule has nothing to go on, and the run ends as #9 left it.
+
+    This is the known gap #25 records: were the Store name lookup to go
+    stale, every page would land here and the scrape would read as a quiet
+    week again.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_A_STORE_NAME,
+                                      PAGE_WITHOUT_A_STORE_NAME))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == []
     assert browser.stopped
 
 
@@ -505,6 +831,13 @@ def test_a_zero_padded_day_reads_the_same():
 # into a night of retained data (#18) for no gain.
 
 
+def test_a_start_time_reads_back_as_the_day_it_happens():
+    """The date as the locator renders it since #26, start time included."""
+    with_a_start_time = {'date': "Saturday, October 24, 2026 03:00 PM"}
+
+    assert tournament_date(with_a_start_time) == datetime.datetime(2026, 10, 24)
+
+
 def test_anything_after_the_year_is_ignored():
     spanning = {'date': "Saturday, September 12, 2026 - Sunday, September 13, 2026"}
 
@@ -610,11 +943,24 @@ def test_a_tournament_falling_today_is_kept():
     It used to compare midnight on the tournament's day against the moment the
     scrape ran, so a tournament today vanished from 00:00 onwards -- including
     from the nightly scrape at 01:00, which is every tournament's own morning.
-    The data carries no start time, so a tournament today may be this evening;
-    showing one that has finished is a smaller harm than hiding one a player
-    could still get to.
+    A tournament today may be this evening; showing one that has finished is a
+    smaller harm than hiding one a player could still get to.
     """
     today = tournament_days_from_today(0)
+
+    assert upcoming_tournaments([today]) == [today]
+
+
+def test_a_tournament_today_is_kept_after_its_start_time():
+    """The locator now renders a start time (#26), and the filter stays
+    whole-day regardless. Hiding a tournament once it has started is a
+    separate decision #25 left out of scope.
+
+    Midnight has always passed by the time this runs, so the start time is
+    behind us without the test depending on the clock.
+    """
+    today = tournament_days_from_today(0)
+    today['date'] += " 12:00 AM"
 
     assert upcoming_tournaments([today]) == [today]
 
