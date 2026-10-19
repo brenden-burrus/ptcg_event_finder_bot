@@ -657,6 +657,13 @@ def test_a_zero_padded_day_reads_the_same():
 # into a night of retained data (#18) for no gain.
 
 
+def test_a_start_time_reads_back_as_the_day_it_happens():
+    """The date as the locator renders it since #26, start time included."""
+    with_a_start_time = {'date': "Saturday, October 24, 2026 03:00 PM"}
+
+    assert tournament_date(with_a_start_time) == datetime.datetime(2026, 10, 24)
+
+
 def test_anything_after_the_year_is_ignored():
     spanning = {'date': "Saturday, September 12, 2026 - Sunday, September 13, 2026"}
 
@@ -762,11 +769,24 @@ def test_a_tournament_falling_today_is_kept():
     It used to compare midnight on the tournament's day against the moment the
     scrape ran, so a tournament today vanished from 00:00 onwards -- including
     from the nightly scrape at 01:00, which is every tournament's own morning.
-    The data carries no start time, so a tournament today may be this evening;
-    showing one that has finished is a smaller harm than hiding one a player
-    could still get to.
+    A tournament today may be this evening; showing one that has finished is a
+    smaller harm than hiding one a player could still get to.
     """
     today = tournament_days_from_today(0)
+
+    assert upcoming_tournaments([today]) == [today]
+
+
+def test_a_tournament_today_is_kept_after_its_start_time():
+    """The locator now renders a start time (#26), and the filter stays
+    whole-day regardless. Hiding a tournament once it has started is a
+    separate decision #25 left out of scope.
+
+    Midnight has always passed by the time this runs, so the start time is
+    behind us without the test depending on the clock.
+    """
+    today = tournament_days_from_today(0)
+    today['date'] += " 12:00 AM"
 
     assert upcoming_tournaments([today]) == [today]
 

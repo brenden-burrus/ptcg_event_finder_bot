@@ -35,9 +35,11 @@ def upcoming_tournaments(tournaments):
     data -- kept when a scrape fails -- has to be filtered the same way, and
     it no longer belongs to the finder that scraped it.
 
-    Today counts as still to come. The scraped date carries no start time, so
-    a tournament today could as easily be this evening as this morning, and
-    hiding one a player could still get to is the worse of the two mistakes.
+    Today counts as still to come, all day. The scraped date carries a start
+    time (#26), but it is only displayed: a tournament could still be running
+    after it, or a player could still get to it, and hiding one they could
+    still attend is the worse of the two mistakes. Hiding a tournament once it
+    has started would be a separate decision.
     """
     today = datetime.date.today()
     return [tournament for tournament in tournaments
