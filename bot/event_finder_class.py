@@ -138,6 +138,18 @@ class PokemonEventFinder:
         return
 
 
+    def findUpcomingEventsSection(self, soup):
+        # Found by what its heading says, not by its id. The locator numbers
+        # its sections by position, and has renumbered them twice; the second
+        # time, the id the scrape read moved onto the Store's contact details
+        # -- #26. The heading is English because the search URL pins the
+        # locale to en-US.
+        for title in soup.find_all('div', class_='custom-section__header__title'):
+            if title.get_text(strip=True) == "Upcoming Events":
+                return title.find_parent('div', class_='custom-section')
+        return None
+
+
     def parseStorePage(self, page_source, page_url):
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         store_name_el = soup.find('span', attrs={'aria-label': lambda v: v and v.startswith('Game Store:')})
@@ -148,11 +160,14 @@ class PokemonEventFinder:
             print("no store name")
             return
         store_name = store_name_el.get_text()
-        cards_list = soup.find('div', id='b11-Content')
-        if not cards_list:
+        upcoming_events = self.findUpcomingEventsSection(soup)
+        if not upcoming_events:
             print("no cards")
             return
-        event_cards = cards_list.find_all('div', class_='margin-bottom-base')
+        # One event-info block is one tournament. The wrapper around each one
+        # is no use: the Calendar widget in the same section shares it, and
+        # has no tournament type to read -- #26.
+        event_cards = upcoming_events.find_all('div', class_='event-info')
         if not event_cards:
             print("no event cards")
             return

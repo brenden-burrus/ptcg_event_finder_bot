@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import pathlib
 import warnings
 
 import pytest
@@ -252,23 +253,48 @@ def test_unreadable_results_count_is_called_out():
 # --- parsing a store page (and the lxml parser it needs) ---------------------
 
 
-STORE_PAGE = """
-<html><body>
-  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
-  <div id="b11-Content">
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Cup</div>
-      <div class="event-info__title ph">League Cup</div>
-      <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
+# The hand-written pages follow the layout the locator served on 2026-10-18
+# (#26), cut down to what the parser reads. The contact details sit under the
+# id the scrape used to read tournaments from, so going back to that id fails
+# here as well as against the real page.
+CONTACT_DETAILS = """
+  <div class="custom-section" id="b11-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title">League Contact Information</div>
     </div>
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Challenge</div>
-      <div class="event-info__title ph">League Challenge</div>
+    <div id="b11-Content">
       <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Sunday, September 13, 2026</div>
     </div>
   </div>
+"""
+
+UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE = """
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">
+      <div class="margin-bottom-base"><div class="event-info">
+        <div class="event-info__category ph">Cup</div>
+        <div class="event-info__title ph">League Cup</div>
+        <div class="event-info__info-item__location">123 Main St</div>
+        <div class="event-info__info-item__text">Saturday, September 12, 2026 01:00 PM</div>
+      </div></div>
+      <div class="margin-bottom-base"><div class="event-info">
+        <div class="event-info__category ph">Challenge</div>
+        <div class="event-info__title ph">League Challenge</div>
+        <div class="event-info__info-item__location">123 Main St</div>
+        <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+      </div></div>
+    </div>
+  </div>
+"""
+
+STORE_PAGE = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  {UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE}
 </body></html>
 """
 
@@ -295,16 +321,11 @@ def test_store_page_events_are_split_by_category():
 # --- #9: a page without a store name must not sink the whole run -------------
 
 
-PAGE_WITHOUT_A_STORE_NAME = """
+# Tournaments and all, so the missing name is the only reason to skip it.
+PAGE_WITHOUT_A_STORE_NAME = f"""
 <html><body>
-  <div id="b11-Content">
-    <div class="margin-bottom-base">
-      <div class="event-info__category ph">Cup</div>
-      <div class="event-info__title ph">League Cup</div>
-      <div class="event-info__info-item__location">123 Main St</div>
-      <div class="event-info__info-item__text">Saturday, September 12, 2026</div>
-    </div>
-  </div>
+  {CONTACT_DETAILS}
+  {UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE}
 </body></html>
 """
 
@@ -342,6 +363,51 @@ async def test_one_unnamed_store_does_not_discard_the_rest_of_the_run(fake_brows
     await finder.getEventSearchResults()
 
     assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
+# --- #26: a Store's tournaments are found under its Upcoming Events heading ---
+
+
+# A real Store page, trimmed -- the comment at the top of it says how. Every
+# Store page test before this one was hand-written, and a hand-written page
+# kept passing for as long as it matched the parser rather than the locator.
+FORTUNA_GAMES_PAGE = (pathlib.Path(__file__).parent
+                      / "fortuna_games_store_page.html").read_text(encoding="utf-8")
+
+
+def one_store(content):
+    """A search that finds one Store, whose page is `content`.
+
+    Two 'Game Store' matches per Store, hence the stride of two in the loop.
+    """
+    stores = [FakeElement(), FakeElement()]
+    return FakePage([stores, stores], content=content)
+
+
+async def test_the_real_store_page_yields_its_league_challenge(fake_browser):
+    """Regression test for #26.
+
+    The locator renumbered the sections on a Store page, so the id the scrape
+    read tournaments from came to hold the Store's contact details, and every
+    Store parsed as having none. The section next to it also wraps a Calendar
+    widget the way it wraps a tournament, and reading that as one crashed.
+    """
+    browser = fake_browser(one_store(FORTUNA_GAMES_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == [{
+        'store': "FORTUNA GAMES",
+        'name': "League Challenge",
+        # The start time is kept as the locator renders it, so Month Posts
+        # show it.
+        'date': "Saturday, October 24, 2026 03:00 PM",
+        'tourney_page': "https://events.pokemon.com/EventLocator/Store/1",
+        'tourney_address': "2632 S KINGSHIGHWAY BLVD, ST. LOUIS, MO 63139, US",
+    }]
     assert browser.stopped
 
 
