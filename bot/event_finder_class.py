@@ -208,8 +208,13 @@ class PokemonEventFinder:
             return StorePageResult.NO_UPCOMING_EVENTS_SECTION
         # One event-info block is one tournament. The wrapper around each one
         # is no use: the Calendar widget in the same section shares it, and
-        # has no tournament type to read -- #26.
-        event_cards = upcoming_events.find_all('div', class_='event-info')
+        # has no tournament type to read -- #26. Only the section's own list,
+        # directly under its content, is searched: the Calendar is a section
+        # of its own beside that list, and nothing it ever holds is to be read
+        # as an upcoming tournament. The list is found by the data-list mark
+        # the locator puts on it, not by an id, which is numbered by position,
+        # nor by its class, which the locator renders with stray quotes in it.
+        event_cards = upcoming_events.select(':scope > div > [data-list] div.event-info')
         if not event_cards:
             # A quiet Store: the section is there and lists nothing. A normal
             # week for plenty of Stores, so it is said plainly.

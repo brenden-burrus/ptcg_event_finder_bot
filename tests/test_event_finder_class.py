@@ -274,18 +274,20 @@ UPCOMING_EVENTS_WITH_A_CUP_AND_A_CHALLENGE = """
       <div class="custom-section__header__title"><span>Upcoming Events</span></div>
     </div>
     <div id="b16-Content">
-      <div class="margin-bottom-base"><div class="event-info">
-        <div class="event-info__category ph">Cup</div>
-        <div class="event-info__title ph">League Cup</div>
-        <div class="event-info__info-item__location">123 Main St</div>
-        <div class="event-info__info-item__text">Saturday, September 12, 2026 01:00 PM</div>
-      </div></div>
-      <div class="margin-bottom-base"><div class="event-info">
-        <div class="event-info__category ph">Challenge</div>
-        <div class="event-info__title ph">League Challenge</div>
-        <div class="event-info__info-item__location">123 Main St</div>
-        <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
-      </div></div>
+      <div class='"list list-group" OSFillParent' data-list="">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Cup</div>
+          <div class="event-info__title ph">League Cup</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Saturday, September 12, 2026 01:00 PM</div>
+        </div></div>
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
     </div>
   </div>
 """
@@ -461,6 +463,63 @@ async def test_a_quiet_store_is_skipped_and_the_run_carries_on(fake_browser, cap
     assert "QUIET GAMES: no upcoming tournaments" in capsys.readouterr().out.splitlines()
     assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
     assert [event['store'] for event in finder.challenge_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
+# The Calendar widget once it has something in it. Today it shows only a
+# button, but "Tap below to load recent and upcoming events" says what it
+# would hold, and recent ones may already have happened.
+STORE_PAGE_WITH_AN_EVENT_IN_ITS_CALENDAR = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b16-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b16-Content">
+      <div class='"list list-group" OSFillParent' data-list="">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
+      <div class="margin-bottom-xxl"><div class="margin-bottom-base">
+        <div class="custom-section" id="b21-b1-Section">
+          <div class="custom-section__header">
+            <div class="custom-section__header__title"><span>Calendar</span></div>
+          </div>
+          <div id="b21-b1-Content">
+            <div class="event-info">
+              <div class="event-info__category ph">Cup</div>
+              <div class="event-info__title ph">League Cup</div>
+              <div class="event-info__info-item__location">123 Main St</div>
+              <div class="event-info__info-item__text">Saturday, August 15, 2026 01:00 PM</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+async def test_an_event_in_the_calendar_is_not_read_as_a_tournament(fake_browser):
+    """Only the Upcoming Events section's own list holds tournaments.
+
+    The Calendar is a section of its own, nested inside Upcoming Events, so
+    a search of everything under the heading reaches into it -- #26.
+    """
+    browser = fake_browser(one_store(STORE_PAGE_WITH_AN_EVENT_IN_ITS_CALENDAR))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
     assert browser.stopped
 
 
