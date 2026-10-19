@@ -464,6 +464,39 @@ async def test_a_quiet_store_is_skipped_and_the_run_carries_on(fake_browser, cap
     assert browser.stopped
 
 
+# A named Store page with its contact details and no Upcoming Events section:
+# what every Store page would look like to the scrape if the heading moved.
+PAGE_WITHOUT_UPCOMING_EVENTS = f"""
+<html><body>
+  <span aria-label="Game Store: ODD GAMES">ODD GAMES</span>
+  {CONTACT_DETAILS}
+</body></html>
+"""
+
+
+async def test_a_store_page_without_upcoming_events_is_skipped_as_a_layout_change(
+        fake_browser, capsys):
+    """One page the scrape cannot read costs only itself, as under #9.
+
+    It is not a quiet Store, though, and must not read like one: the message
+    names the likely cause, so the next renumbering is not mistaken for an
+    empty week.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS, STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    odd_store = [line for line in capsys.readouterr().out.splitlines()
+                 if line.startswith("ODD GAMES")]
+    assert len(odd_store) == 1
+    assert "Upcoming Events" in odd_store[0]
+    assert "layout may have changed" in odd_store[0]
+    assert [event['store'] for event in finder.cup_dicts] == ["FORTUNA GAMES"]
+    assert [event['store'] for event in finder.challenge_dicts] == ["FORTUNA GAMES"]
+    assert browser.stopped
+
+
 # --- #21: a scrape that fails part-way still closes the browser --------------
 
 

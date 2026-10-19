@@ -162,7 +162,11 @@ class PokemonEventFinder:
         store_name = store_name_el.get_text()
         upcoming_events = self.findUpcomingEventsSection(soup)
         if not upcoming_events:
-            print("no cards")
+            # Not a quiet Store: a quiet one still has the heading, with
+            # nothing under it. Skipping just this page keeps the rest of the
+            # run, as for an unnamed page, but the message says what it most
+            # likely means.
+            print(f"{store_name}: no Upcoming Events section -- the Store page layout may have changed")
             return
         # One event-info block is one tournament. The wrapper around each one
         # is no use: the Calendar widget in the same section shares it, and
