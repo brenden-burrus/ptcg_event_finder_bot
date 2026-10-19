@@ -518,6 +518,23 @@ async def test_a_scrape_where_no_store_page_has_upcoming_events_raises(fake_brow
     assert browser.stopped
 
 
+async def test_a_quiet_store_counts_as_having_upcoming_events(fake_browser):
+    """A quiet Store's page has the section, with nothing under it.
+
+    That is the page reading correctly, so it is enough on its own to show
+    the layout still works: the odd page beside it is skipped (#26), and the
+    run is a quiet one, not a failed one.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS, QUIET_STORE_PAGE))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == []
+    assert browser.stopped
+
+
 # --- #21: a scrape that fails part-way still closes the browser --------------
 
 
