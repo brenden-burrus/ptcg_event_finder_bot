@@ -508,7 +508,7 @@ STORE_PAGE_WITH_AN_EVENT_IN_ITS_CALENDAR = f"""
 
 
 async def test_an_event_in_the_calendar_is_not_read_as_a_tournament(fake_browser):
-    """Only the Upcoming Events section's own list holds tournaments.
+    """Only the Upcoming Events section's own tournaments are read.
 
     The Calendar is a section of its own, nested inside Upcoming Events, so
     a search of everything under the heading reaches into it -- #26.
@@ -519,6 +519,47 @@ async def test_an_event_in_the_calendar_is_not_read_as_a_tournament(fake_browser
     await finder.getEventSearchResults()
 
     assert finder.cup_dicts == []
+    assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
+    assert browser.stopped
+
+
+# The same tournament with the list around it marked up differently: an extra
+# wrapper, and no data-list mark.
+STORE_PAGE_WITH_ITS_LIST_RESHUFFLED = f"""
+<html><body>
+  <span aria-label="Game Store: FORTUNA GAMES">FORTUNA GAMES</span>
+  {CONTACT_DETAILS}
+  <div class="custom-section" id="b17-Section">
+    <div class="custom-section__header">
+      <div class="custom-section__header__title"><span>Upcoming Events</span></div>
+    </div>
+    <div id="b17-Content"><div class="list-wrapper">
+      <div class="list list-group">
+        <div class="margin-bottom-base"><div class="event-info">
+          <div class="event-info__category ph">Challenge</div>
+          <div class="event-info__title ph">League Challenge</div>
+          <div class="event-info__info-item__location">123 Main St</div>
+          <div class="event-info__info-item__text">Sunday, September 13, 2026 11:00 AM</div>
+        </div></div>
+      </div>
+    </div>{CALENDAR_WIDGET}</div>
+  </div>
+</body></html>
+"""
+
+
+async def test_a_reshuffled_list_still_yields_its_tournaments(fake_browser):
+    """Keeping the Calendar out must not tie the scrape to the list's markup.
+
+    Were it tied, a reshuffle there would read every Store as a Quiet Store:
+    the section is still found, so the run-level check (#27) cannot tell that
+    from a quiet week, and the bot falls silent again the way #26 began.
+    """
+    browser = fake_browser(one_store(STORE_PAGE_WITH_ITS_LIST_RESHUFFLED))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
     assert [event['name'] for event in finder.challenge_dicts] == ["League Challenge"]
     assert browser.stopped
 
