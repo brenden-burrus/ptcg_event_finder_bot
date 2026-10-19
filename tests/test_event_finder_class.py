@@ -535,6 +535,42 @@ async def test_a_quiet_store_counts_as_having_upcoming_events(fake_browser):
     assert browser.stopped
 
 
+async def test_an_unnamed_page_does_not_count_as_having_upcoming_events(fake_browser):
+    """A page skipped for having no Store name (#9) is never read further.
+
+    This one has the section, tournaments and all, but the scrape cannot
+    know that without reading a page it has already skipped. So it is no
+    evidence the layout still works, and the named page beside it decides.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_A_STORE_NAME,
+                                      PAGE_WITHOUT_UPCOMING_EVENTS))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(RuntimeError, match="layout may have changed"):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped
+
+
+async def test_a_scrape_of_only_unnamed_pages_does_not_raise(fake_browser):
+    """Nor is an unnamed page evidence the layout broke. With no named page
+    parsed, the rule has nothing to go on, and the run ends as #9 left it.
+
+    This is the known gap #25 records: were the Store name lookup to go
+    stale, every page would land here and the scrape would read as a quiet
+    week again.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_A_STORE_NAME,
+                                      PAGE_WITHOUT_A_STORE_NAME))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    await finder.getEventSearchResults()
+
+    assert finder.cup_dicts == []
+    assert finder.challenge_dicts == []
+    assert browser.stopped
+
+
 # --- #21: a scrape that fails part-way still closes the browser --------------
 
 
