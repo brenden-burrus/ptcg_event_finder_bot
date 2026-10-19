@@ -5,6 +5,7 @@ import re
 import time
 import bs4
 import datetime
+import enum
 import os
 
 
@@ -44,6 +45,24 @@ def upcoming_tournaments(tournaments):
     today = datetime.date.today()
     return [tournament for tournament in tournaments
             if tournament_date(tournament).date() >= today]
+
+
+class StorePageResult(enum.Enum):
+    """What reading one Store page came to, for the scrape's run-level check.
+
+    One page without the Upcoming Events section costs only itself, but no
+    named page having it fails the scrape -- #27. These are the three ways a
+    page can come out, named so that rule reads plainly where it is applied.
+    """
+    # Skipped unread, as under #9. It says nothing about the section either
+    # way, so it counts neither way.
+    NO_STORE_NAME = enum.auto()
+    # A named page without the section: most likely a layout change (#26).
+    NO_UPCOMING_EVENTS_SECTION = enum.auto()
+    # The section was there and was read. A quiet Store lands here too: its
+    # section is there with nothing under it, which is the page reading
+    # correctly.
+    READ = enum.auto()
 
 
 class PokemonEventFinder:
@@ -99,10 +118,8 @@ class PokemonEventFinder:
                 # loop means the page stopped re-rendering, which is a real error.
                 store_list = []
                 print(self.describeEmptyResults(await page.get_content()))
-            # Whether any named Store page has been parsed, and whether any of
-            # them had the Upcoming Events section -- #27.
-            parsed_a_named_page = False
-            found_upcoming_events = False
+            # How each Store page came out, for the check after the loop -- #27.
+            page_results = set()
             i = 0
             imax = len(store_list)
             # print(len(store_list))
@@ -111,10 +128,7 @@ class PokemonEventFinder:
                 await browser.wait(3)
                 html = await page.get_content()
                 page_url = page.url
-                had_upcoming_events = self.parseStorePage(html, page_url)
-                if had_upcoming_events is not None:
-                    parsed_a_named_page = True
-                    found_upcoming_events = found_upcoming_events or had_upcoming_events
+                page_results.add(self.parseStorePage(html, page_url))
                 await browser.wait(3)
                 back_button = await page.find("Back to previous screen")
                 await back_button.click()
@@ -128,8 +142,10 @@ class PokemonEventFinder:
             # every Store parsed as empty and the handler kept the old
             # tournaments without a word -- #27. Raised inside the guarded
             # region, so the browser is still closed (#21). A search that found
-            # no Stores parsed no pages, so it stays a quiet week (#8).
-            if parsed_a_named_page and not found_upcoming_events:
+            # no Stores parsed no pages, so it stays a quiet week (#8), and a
+            # page with no Store name counts neither way (#9).
+            if (StorePageResult.NO_UPCOMING_EVENTS_SECTION in page_results
+                    and StorePageResult.READ not in page_results):
                 raise RuntimeError("no Store page had an Upcoming Events section"
                                    " -- the Store page layout may have changed")
         except BaseException:
@@ -170,9 +186,8 @@ class PokemonEventFinder:
 
 
     def parseStorePage(self, page_source, page_url):
-        # Returns whether the page had the Upcoming Events section, for the
-        # scrape's run-level check (#27). None for a page with no Store name,
-        # which counts neither way: it says nothing about the section.
+        # Returns how the page came out, for the scrape's run-level check
+        # (#27): see StorePageResult.
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         store_name_el = soup.find('span', attrs={'aria-label': lambda v: v and v.startswith('Game Store:')})
         if not store_name_el:
@@ -180,7 +195,7 @@ class PokemonEventFinder:
             # Skipping just this page keeps the stores already parsed in this
             # run, rather than letting one odd page throw all of them away.
             print("no store name")
-            return None
+            return StorePageResult.NO_STORE_NAME
         store_name = store_name_el.get_text()
         upcoming_events = self.findUpcomingEventsSection(soup)
         if not upcoming_events:
@@ -190,7 +205,7 @@ class PokemonEventFinder:
             # this page keeps the rest of the run, as for an unnamed page, but
             # the message says what it most likely means.
             print(f"{store_name}: no Upcoming Events section -- the Store page layout may have changed")
-            return False
+            return StorePageResult.NO_UPCOMING_EVENTS_SECTION
         # One event-info block is one tournament. The wrapper around each one
         # is no use: the Calendar widget in the same section shares it, and
         # has no tournament type to read -- #26.
@@ -199,7 +214,7 @@ class PokemonEventFinder:
             # A quiet Store: the section is there and lists nothing. A normal
             # week for plenty of Stores, so it is said plainly.
             print(f"{store_name}: no upcoming tournaments")
-            return True
+            return StorePageResult.READ
 
         print(f"{store_name}")
         for card in event_cards:
@@ -220,7 +235,7 @@ class PokemonEventFinder:
             else:
                 self.challenge_dicts.append(temp_dict)
 
-        return True
+        return StorePageResult.READ
 
 
     def CleanupPastEvents(self):
