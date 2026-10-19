@@ -99,6 +99,10 @@ class PokemonEventFinder:
                 # loop means the page stopped re-rendering, which is a real error.
                 store_list = []
                 print(self.describeEmptyResults(await page.get_content()))
+            # Whether any named Store page has been parsed, and whether any of
+            # them had the Upcoming Events section -- #27.
+            parsed_a_named_page = False
+            found_upcoming_events = False
             i = 0
             imax = len(store_list)
             # print(len(store_list))
@@ -107,7 +111,10 @@ class PokemonEventFinder:
                 await browser.wait(3)
                 html = await page.get_content()
                 page_url = page.url
-                self.parseStorePage(html, page_url)
+                had_upcoming_events = self.parseStorePage(html, page_url)
+                if had_upcoming_events is not None:
+                    parsed_a_named_page = True
+                    found_upcoming_events = found_upcoming_events or had_upcoming_events
                 await browser.wait(3)
                 back_button = await page.find("Back to previous screen")
                 await back_button.click()
@@ -115,6 +122,16 @@ class PokemonEventFinder:
 
                 store_list = await page.find_all('Game Store')
                 i += 2
+
+            # One page without the section costs only itself, but none of them
+            # having it is a layout change, which once passed for a quiet week:
+            # every Store parsed as empty and the handler kept the old
+            # tournaments without a word -- #27. Raised inside the guarded
+            # region, so the browser is still closed (#21). A search that found
+            # no Stores parsed no pages, so it stays a quiet week (#8).
+            if parsed_a_named_page and not found_upcoming_events:
+                raise RuntimeError("no Store page had an Upcoming Events section"
+                                   " -- the Store page layout may have changed")
         except BaseException:
             # A scrape that fails part-way still closes the browser on its way
             # out -- #21. Left open, zendriver's atexit fallback stops it while
@@ -153,6 +170,9 @@ class PokemonEventFinder:
 
 
     def parseStorePage(self, page_source, page_url):
+        # Returns whether the page had the Upcoming Events section, for the
+        # scrape's run-level check (#27). None for a page with no Store name,
+        # which counts neither way: it says nothing about the section.
         soup = bs4.BeautifulSoup(page_source, 'lxml')
         store_name_el = soup.find('span', attrs={'aria-label': lambda v: v and v.startswith('Game Store:')})
         if not store_name_el:
@@ -160,7 +180,7 @@ class PokemonEventFinder:
             # Skipping just this page keeps the stores already parsed in this
             # run, rather than letting one odd page throw all of them away.
             print("no store name")
-            return
+            return None
         store_name = store_name_el.get_text()
         upcoming_events = self.findUpcomingEventsSection(soup)
         if not upcoming_events:
@@ -170,7 +190,7 @@ class PokemonEventFinder:
             # this page keeps the rest of the run, as for an unnamed page, but
             # the message says what it most likely means.
             print(f"{store_name}: no Upcoming Events section -- the Store page layout may have changed")
-            return
+            return False
         # One event-info block is one tournament. The wrapper around each one
         # is no use: the Calendar widget in the same section shares it, and
         # has no tournament type to read -- #26.
@@ -179,7 +199,7 @@ class PokemonEventFinder:
             # A quiet Store: the section is there and lists nothing. A normal
             # week for plenty of Stores, so it is said plainly.
             print(f"{store_name}: no upcoming tournaments")
-            return
+            return True
 
         print(f"{store_name}")
         for card in event_cards:
@@ -200,7 +220,7 @@ class PokemonEventFinder:
             else:
                 self.challenge_dicts.append(temp_dict)
 
-        return
+        return True
 
 
     def CleanupPastEvents(self):

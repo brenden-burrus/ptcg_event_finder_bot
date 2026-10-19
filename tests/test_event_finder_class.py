@@ -497,6 +497,27 @@ async def test_a_store_page_without_upcoming_events_is_skipped_as_a_layout_chang
     assert browser.stopped
 
 
+# --- #27: no Store page with Upcoming Events is a failed scrape --------------
+
+
+async def test_a_scrape_where_no_store_page_has_upcoming_events_raises(fake_browser):
+    """Regression test for #27.
+
+    Every Store printed `no event cards`, the scrape finished as if nothing
+    were wrong, and the handler read the empty result as a quiet week. A
+    layout change that hits every Store has to fail the scrape instead, and
+    still close the browser on the way out, as #21 asks of any failure.
+    """
+    browser = fake_browser(two_stores(PAGE_WITHOUT_UPCOMING_EVENTS,
+                                      PAGE_WITHOUT_UPCOMING_EVENTS))
+    finder = PokemonEventFinder(URL, LOCATION)
+
+    with pytest.raises(RuntimeError, match="layout may have changed"):
+        await finder.getEventSearchResults()
+
+    assert browser.stopped
+
+
 # --- #21: a scrape that fails part-way still closes the browser --------------
 
 
